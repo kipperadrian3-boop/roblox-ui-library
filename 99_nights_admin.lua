@@ -938,7 +938,7 @@ local function unequipTool(tool)
     end
 end
 
--- Admin Defense Loop
+-- Admin Defense & KillAura Loop (Targets Mobs, Trees, Ores & Breakables)
 local function adminDefenseLoop()
     while adminDefenseToggle do
         local character = player.Character or player.CharacterAdded:Wait()
@@ -948,18 +948,50 @@ local function adminDefenseLoop()
             if tool and damageID then
                 equipTool(tool)
 
-                for _, mob in ipairs(Workspace.Characters:GetChildren()) do
-                    if mob:IsA("Model") then
-                        local part = mob:FindFirstChildWhichIsA("BasePart")
-                        if part and (part.Position - hrp.Position).Magnitude <= radius then
-                            pcall(function()
-                                RemoteEvents.ToolDamageObject:InvokeServer(
-                                    mob,
-                                    tool,
-                                    damageID,
-                                    CFrame.new(part.Position)
-                                )
-                            end)
+                -- 1. Attack Mobs & Characters
+                if Workspace:FindFirstChild("Characters") then
+                    for _, mob in ipairs(Workspace.Characters:GetChildren()) do
+                        if mob:IsA("Model") then
+                            local part = mob:FindFirstChildWhichIsA("BasePart")
+                            if part and (part.Position - hrp.Position).Magnitude <= radius then
+                                pcall(function()
+                                    RemoteEvents.ToolDamageObject:InvokeServer(
+                                        mob,
+                                        tool,
+                                        damageID,
+                                        CFrame.new(part.Position)
+                                    )
+                                end)
+                            end
+                        end
+                    end
+                end
+
+                -- 2. Attack Trees, Foliage & Breakable Environment Objects
+                local map = Workspace:FindFirstChild("Map")
+                local foldersToScan = {
+                    map and map:FindFirstChild("Foliage"),
+                    map and map:FindFirstChild("Landmarks"),
+                    Workspace:FindFirstChild("Structures"),
+                    Workspace:FindFirstChild("Boulders")
+                }
+
+                for _, folder in ipairs(foldersToScan) do
+                    if folder then
+                        for _, obj in ipairs(folder:GetChildren()) do
+                            if obj:IsA("Model") or obj:IsA("BasePart") then
+                                local part = obj:IsA("BasePart") and obj or obj:FindFirstChildWhichIsA("BasePart")
+                                if part and (part.Position - hrp.Position).Magnitude <= radius then
+                                    pcall(function()
+                                        RemoteEvents.ToolDamageObject:InvokeServer(
+                                            obj,
+                                            tool,
+                                            damageID,
+                                            CFrame.new(part.Position)
+                                        )
+                                    end)
+                                end
+                            end
                         end
                     end
                 end
