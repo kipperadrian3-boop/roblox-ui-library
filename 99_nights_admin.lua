@@ -943,13 +943,29 @@ local function teleportItem(itemName)
     end
 end
 
+local bulkCategoryDropdown = itemtp:CreateDropDown("⚡ Bring Entire Category (Bulk Fetch All):")
+
 for groupName, itemList in pairs(bracket) do
-    local label = groupName:gsub("_", " "):gsub("/", "/")
-    label = label:gsub("(%a)([%w_']*)", function(first, rest)
+    local categoryTitle = groupName:gsub("_", " "):gsub("/", "/")
+    categoryTitle = categoryTitle:gsub("(%a)([%w_']*)", function(first, rest)
         return first:upper() .. rest:lower()
     end)
-    label = label .. " Fetcher"
-    local dropdown = itemtp:CreateDropDown(label)
+
+    -- Master Bulk Category button
+    bulkCategoryDropdown:AddButton("⚡ Bring ALL " .. categoryTitle, function()
+        for _, itemName in ipairs(itemList) do
+            teleportItem(itemName)
+        end
+    end)
+
+    -- Individual Category Fetcher dropdown
+    local dropdown = itemtp:CreateDropDown(categoryTitle .. " Fetcher")
+    dropdown:AddButton("⚡ Bring ALL " .. categoryTitle, function()
+        for _, itemName in ipairs(itemList) do
+            teleportItem(itemName)
+        end
+    end)
+
     for _, itemName in ipairs(itemList) do
         dropdown:AddButton(itemName, function()
             teleportItem(itemName)
