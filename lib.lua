@@ -162,9 +162,9 @@ function Library:CreateInterface(titleText, descText, discordLink, position, the
         MainStroke.Color = t.Stroke
     end)
 
-    -- Toggle UI with Left Control Key
+    -- Toggle UI with K Key
     UserInputService.InputBegan:Connect(function(input, gameProcessed)
-        if not gameProcessed and input.KeyCode == Enum.KeyCode.LeftControl then
+        if not gameProcessed and input.KeyCode == Enum.KeyCode.K then
             MainFrame.Visible = not MainFrame.Visible
         end
     end)
