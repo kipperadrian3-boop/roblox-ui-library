@@ -1,9 +1,8 @@
 --[[
 	99 Nights in the Forest - Admin & Management Suite
-	Official Staff & Developer Utilities Panel (main.lua)
+	Official Staff & Developer Utilities Panel (99_nights_admin.lua)
 ]]
 
--- DEIN GITHUB RAW LINK:
 local REPO_URL = "https://raw.githubusercontent.com/kipperadrian3-boop/roblox-ui-library/main/"
 
 local success, lib = pcall(function()
@@ -12,7 +11,6 @@ end)
 
 if not success or not lib or type(lib) ~= "table" then
     warn("[Admin Panel Error] Die UI-Bibliothek (lib.lua) konnte nicht von GitHub geladen werden!")
-    warn("[Admin Panel Error] Bitte trage deine GitHub Raw URL in Zeile 7 von main.lua ein!")
     return
 end
 

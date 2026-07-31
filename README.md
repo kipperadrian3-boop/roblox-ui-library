@@ -1,31 +1,38 @@
-# 🌲 99 Nights in the Forest - Admin & Management Suite
+# 🛠️ Roblox UI Library & Game Script Suite
 
-Official Roblox Admin Panel & Developer Management Utilities.
+A modular, themeable Roblox UI Framework (`lib.lua`) and Game Admin Scripts.
 
-## 🚀 How to Execute (1-Line Loader)
+## 📁 Repository Structure
 
-Run this single line in your Roblox executor:
+* **`lib.lua`** - Reusable Roblox UI Library Framework (supports custom components & themes).
+* **`themes.lua`** - Preset UI Color Themes (`royal`, `dark`, `emerald`, `cyber`, `midnight`).
+* **`99_nights_admin.lua`** - Official Admin Panel for Roblox Game *"99 Nights in the Forest"*.
+* **`loader.lua`** - 1-Line Loader for *99 Nights in the Forest* Admin Panel.
+
+---
+
+## 🌲 99 Nights in the Forest - Quick Execution
+
+Run this 1-line script in your Roblox executor:
 
 ```lua
-loadstring(game:HttpGet("https://raw.githubusercontent.com/kipperadrian3-boop/roblox-ui-library/main/main.lua"))()
+loadstring(game:HttpGet("https://raw.githubusercontent.com/kipperadrian3-boop/roblox-ui-library/main/99_nights_admin.lua"))()
 ```
 
-## 📁 Repository File Structure
+---
 
-* **`main.lua`** - Main script logic & features.
-* **`lib.lua`** - Custom UI Library with theme rendering support.
-* **`themes.lua`** - UI color themes (`royal`, `dark`, `emerald`, `cyber`, `midnight`).
-* **`loader.lua`** - 1-Line loader reference.
+## 🎨 How to use `lib.lua` for your own Roblox Scripts
 
-## 🎨 Themes Supported
-
-You can change the UI theme in `main.lua` (line 17) by passing your favorite theme:
-* `"royal"` (Default - Deep Purple / Royal Blue)
-* `"dark"` (Sleek Dark Mode)
-* `"emerald"` (Forest Emerald Green)
-* `"cyber"` (Neon Cyan / Cyberpunk)
-* `"midnight"` (Pink / Violet Midnight)
+You can use this UI library for any of your future Roblox game scripts! Simply load `lib.lua` from this repository:
 
 ```lua
-local int = lib:CreateInterface("99 Nights Admin Panel", "Admin & Management Suite", "https://discord.gg/ZNTHTWx7KE", "bottom left", "royal")
+local lib = loadstring(game:HttpGet("https://raw.githubusercontent.com/kipperadrian3-boop/roblox-ui-library/main/lib.lua"))()
+
+-- Create Interface with theme ("royal", "dark", "emerald", "cyber", "midnight")
+local int = lib:CreateInterface("My Script Title", "Subtitle", "https://discord.gg/...", "bottom left", "royal")
+local mainTab = int:CreateTab("Main", "Main Features")
+
+mainTab:CreateCheckbox("Toggle Feature", function(enabled)
+    print("Feature state:", enabled)
+end)
 ```
