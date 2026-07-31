@@ -997,7 +997,7 @@ main:CreateCheckbox("KillAura / Admin Defense (Auto-Attack Mobs)", function(stat
     end
 end)
 
-main:CreateSlider("KillAura Distance (0 - 500 Studs)", 500, 0, function(value)
+main:CreateSlider("KillAura Distance (0 - 500 Studs)", 0, 500, 200, function(value)
     radius = math.clamp(value, 0, 500)
 end)
 

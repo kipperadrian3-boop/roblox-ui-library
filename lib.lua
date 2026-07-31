@@ -464,11 +464,26 @@ function Library:CreateInterface(titleText, descText, discordLink, position, the
             return Card
         end
 
-        function TabObj:CreateSlider(labelTitle, maxVal, minOrDefault, callback)
-            local minVal = 0
-            local defaultVal = minOrDefault or 16
-            if type(minOrDefault) == "number" and minOrDefault > maxVal then
-                defaultVal = minOrDefault
+        function TabObj:CreateSlider(labelTitle, minValArg, maxValArg, defaultValArg, callbackArg)
+            local minVal, maxVal, defaultVal, callback
+
+            if type(callbackArg) == "function" then
+                -- 5 arguments: (labelTitle, minVal, maxVal, defaultVal, callback)
+                minVal = minValArg or 0
+                maxVal = maxValArg or 500
+                defaultVal = defaultValArg or minVal
+                callback = callbackArg
+            elseif type(defaultValArg) == "function" then
+                -- 4 arguments: (labelTitle, maxVal, minOrDefault/defaultVal, callback)
+                maxVal = minValArg or 500
+                minVal = 0
+                defaultVal = maxValArg or 0
+                callback = defaultValArg
+            else
+                minVal = minValArg or 0
+                maxVal = maxValArg or 500
+                defaultVal = defaultValArg or minVal
+                callback = callbackArg
             end
 
             local Card = create("Frame", {
