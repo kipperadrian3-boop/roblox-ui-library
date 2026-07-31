@@ -20,7 +20,6 @@ local main = int:CreateTab("Main", "Main Admin Controls & Utilities", "default",
 local autofarmss = int:CreateTab("Automation", "Automated Maintenance & Resource Systems", "op")
 local itemtp = int:CreateTab("Bring", "Item Teleports & Resource Fetchers", "item")
 local gametp = int:CreateTab("Location TP", "Map & Landmark Teleports", "info")
-local charactertp = int:CreateTab("Mob Manager", "Entity & Mob Teleports", "npc")
 local plr = int:CreateTab("Player Admin", "Local Player Modifiers", "player")
 local vis = int:CreateTab("Visual Tools", "Player & Object Visual Trackers", "visuals")
 local misc = int:CreateTab("Admin Tools", "Developer Console & Extra Scripts", "misc")
@@ -393,66 +392,6 @@ for _, scrapName in ipairs(scrapItems) do
 end
 
 
-
--- Fetch Mob to Admin Position
-
-local characterFolder = workspace:WaitForChild("Characters")
-
--- List of character names to teleport
-local possibleCharacters = {
-    "Alpha Wolf",
-    "Bear",
-    "Lost Child",
-    "Lost Child2",
-    "Lost Child3",
-    "Lost Child4",
-    "Wolf",
-    "Bunny",
-    "Cultist",
-    "Alien"
-}
-
-local bringCharacterToYou = charactertp:CreateDropDown("Fetch Mob to Admin:")
-
-local function getMainPart(model)
-    if model.PrimaryPart then
-        return model.PrimaryPart
-    end
-    for _, part in ipairs(model:GetDescendants()) do
-        if part:IsA("BasePart") then
-            return part
-        end
-    end
-    return nil
-end
-
-local function teleportCharacter(characterName)
-    local stackOffsetY = 3
-    local count = 0
-
-    for _, model in ipairs(characterFolder:GetChildren()) do
-        if model.Name == characterName then
-            local mainPart = getMainPart(model)
-            if mainPart and rootPart then
-                local targetCFrame = rootPart.CFrame + Vector3.new(0, count * stackOffsetY, 0)
-                if model.PrimaryPart then
-                    model:SetPrimaryPartCFrame(targetCFrame)
-                else
-                    mainPart.CFrame = targetCFrame
-                end
-                count = count + 1
-            else
-                warn("No main part found for character:", model:GetFullName())
-            end
-        end
-    end
-end
-
-for _, characterName in ipairs(possibleCharacters) do
-    bringCharacterToYou:AddButton(characterName, function()
-        teleportCharacter(characterName)
-    end)
-end
 
 
 -- === Player Admin Modifiers ===
@@ -943,7 +882,7 @@ local function teleportItem(itemName)
     end
 end
 
-local bulkCategoryDropdown = itemtp:CreateDropDown("⚡ Bring Entire Category (Bulk Fetch All):")
+local bulkCategoryDropdown = itemtp:CreateDropDown("⚡ Bring Category (Bulk Fetch All):")
 
 for groupName, itemList in pairs(bracket) do
     local categoryTitle = groupName:gsub("_", " "):gsub("/", "/")
@@ -957,20 +896,6 @@ for groupName, itemList in pairs(bracket) do
             teleportItem(itemName)
         end
     end)
-
-    -- Individual Category Fetcher dropdown
-    local dropdown = itemtp:CreateDropDown(categoryTitle .. " Fetcher")
-    dropdown:AddButton("⚡ Bring ALL " .. categoryTitle, function()
-        for _, itemName in ipairs(itemList) do
-            teleportItem(itemName)
-        end
-    end)
-
-    for _, itemName in ipairs(itemList) do
-        dropdown:AddButton(itemName, function()
-            teleportItem(itemName)
-        end)
-    end
 end
 
 
