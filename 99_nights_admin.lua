@@ -180,7 +180,83 @@ itemtp:CreateCheckbox("Item Visual Tracker (ESP)", function(state)
         for _, conn in connections do
             if conn.Disconnect then conn:Disconnect() end
         end
-        table.clear(connections)
+    end
+end)
+
+-- Green Chest ESP (Highlights any item under workspace.Items with "chest" in its name in Green)
+local chestESPEnabled = false
+local chestESPConnections = {}
+
+local function applyChestESP(item)
+    if not item or not item.Name:lower():find("chest") then return end
+    local part = item.PrimaryPart or item:FindFirstChildWhichIsA("BasePart") or item:FindFirstChild("Handle")
+    if not part or item:FindFirstChild("ChestESP") then return end
+
+    local highlight = Instance.new("Highlight")
+    highlight.Name = "ChestESP"
+    highlight.Adornee = item
+    highlight.FillColor = Color3.fromRGB(0, 255, 120) -- Bright Green
+    highlight.FillTransparency = 0.5
+    highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
+    highlight.OutlineTransparency = 0
+    highlight.AlwaysOnTop = true
+    highlight.Parent = item
+
+    local billboard = Instance.new("BillboardGui")
+    billboard.Name = "ChestESPText"
+    billboard.Size = UDim2.new(0, 120, 0, 30)
+    billboard.Adornee = part
+    billboard.AlwaysOnTop = true
+    billboard.StudsOffset = Vector3.new(0, 2.5, 0)
+
+    local label = Instance.new("TextLabel")
+    label.Size = UDim2.new(1, 0, 1, 0)
+    label.BackgroundTransparency = 1
+    label.Text = "📦 " .. item.Name
+    label.TextColor3 = Color3.fromRGB(0, 255, 120)
+    label.TextStrokeTransparency = 0.3
+    label.TextSize = 16
+    label.Font = Enum.Font.GothamBold
+    label.Parent = billboard
+
+    billboard.Parent = item
+end
+
+local function removeAllChestESP()
+    local itemFolder = workspace:FindFirstChild("Items")
+    if itemFolder then
+        for _, item in ipairs(itemFolder:GetChildren()) do
+            local esp = item:FindFirstChild("ChestESP")
+            if esp then esp:Destroy() end
+            local text = item:FindFirstChild("ChestESPText")
+            if text then text:Destroy() end
+        end
+    end
+end
+
+itemtp:CreateCheckbox("Chest Visual Tracker (Green Chest ESP)", function(state)
+    chestESPEnabled = state
+    local itemFolder = workspace:FindFirstChild("Items")
+    if not itemFolder then return end
+
+    if state then
+        for _, item in ipairs(itemFolder:GetChildren()) do
+            applyChestESP(item)
+        end
+
+        local conn = itemFolder.ChildAdded:Connect(function(item)
+            if chestESPEnabled then
+                task.wait(0.1)
+                applyChestESP(item)
+            end
+        end)
+        table.insert(chestESPConnections, conn)
+    else
+        removeAllChestESP()
+        for _, conn in ipairs(chestESPConnections) do
+            if conn.Disconnect then conn:Disconnect() end
+        end
+        table.clear(chestESPConnections)
     end
 end)
 
@@ -344,7 +420,7 @@ local weaponItems = {
     "Vampire Scythe", "Revolver", "Rifle", "Tactical Shotgun",
     "Snowball", "Frozen Shuriken", "Kunai", "Ray Gun",
     "Laser Cannon", "Flamethrower", "Crossbow", "Wildfire",
-    "Infernal Crossbow"
+    "Infernal Crossbow", "Revolver Ammo", "Rifle Ammo", "Shotgun Ammo"
 }
 
 local bringWeapons = itemtp:CreateDropDown("Fetch Weapons Items (Weapons Bulk):")
@@ -360,6 +436,66 @@ for _, weaponName in ipairs(weaponItems) do
         teleportItem(weaponName)
     end)
 end
+
+-- Fetch Tool Items (Official Wiki Tools List)
+local toolItems = {
+    "Old Axe", "Good Axe", "Ice Axe", "Strong Axe",
+    "Chainsaw", "Admin Axe", "Old Sack", "Good Sack",
+    "Giant Sack", "Infernal Sack", "Admin Sack", "Old Flashlight",
+    "Strong Flashlight", "Old Rod", "Good Rod", "Strong Rod",
+    "Old Taming Flute", "Good Taming Flute", "Strong Taming Flute", "Hammer",
+    "Obsidiron Hammer"
+}
+
+local bringTools = itemtp:CreateDropDown("Fetch Tool Items (Tools Bulk):")
+
+bringTools:AddButton("⚡ Bring ALL Tool Items", function()
+    for _, toolName in ipairs(toolItems) do
+        teleportItem(toolName)
+    end
+end)
+
+for _, toolName in ipairs(toolItems) do
+    bringTools:AddButton("Fetch " .. toolName, function()
+        teleportItem(toolName)
+    end)
+end
+
+-- Fetch Furniture Items (Official Wiki Furniture List)
+local furnitureItems = {
+    "Trellis", "Fence Segment", "Wooden Stool", "Log Bench",
+    "Wooden Chair", "Camping Chair", "Beanbag", "Pillow",
+    "Rug", "Signpost", "Wooden Table", "Round Wooden Table",
+    "Wooden Nightstand", "Wooden Bookshelf", "Barrel", "Lavender",
+    "Sunflower", "Deer Trophy", "Fairy Lights Double", "Fairy Lights Arch",
+    "Fairy Lights Single", "Snowman", "Icy Throne", "Rainbow Fish Lounger",
+    "Fishbowl", "Bearskin Rug", "Restaurant Table", "Volcano Statue",
+    "Lava Fountain", "Meteor Lamp", "Crafter Rug", "Jack-o'-Lantern",
+    "Spooky Table", "Spooky Chairs", "Bone Claw Chair", "Bone Fence",
+    "Bone Arch", "Table", "Thin Table", "Wolf Head",
+    "Hoop", "Toilet"
+}
+
+local bringFurniture = itemtp:CreateDropDown("Fetch Furniture Items (Furniture Bulk):")
+
+bringFurniture:AddButton("⚡ Bring ALL Furniture Items", function()
+    for _, furnitureName in ipairs(furnitureItems) do
+        teleportItem(furnitureName)
+    end
+end)
+
+for _, furnitureName in ipairs(furnitureItems) do
+    bringFurniture:AddButton("Fetch " .. furnitureName, function()
+        teleportItem(furnitureName)
+    end)
+end
+
+-- Fetch Logs (Logs Bulk)
+local bringLogs = itemtp:CreateDropDown("Fetch Logs (Logs Bulk):")
+
+bringLogs:AddButton("⚡ Bring ALL Logs", function()
+    teleportItem("Log")
+end)
 
 -- Fetch Scrap Items (Official Wiki Scrap List)
 local scrapItems = {
@@ -425,6 +561,10 @@ bringFuel:AddButton("⚡ Bring ALL Fuel Items", function()
     for _, fuelName in ipairs(fuelItems) do
         teleportItem(fuelName)
     end
+end)
+
+bringFuel:AddButton("⚡ Bring ALL Logs", function()
+    teleportItem("Log")
 end)
 
 for _, fuelName in ipairs(fuelItems) do
@@ -856,25 +996,17 @@ end)
 itemtp:CreateComment("Category Item Fetchers:")
 
 local bracket = {
-    consumables = consumableItems,
     weapons = weaponItems,
-    scrap = scrapItems,
+    tools = toolItems,
+    consumables = consumableItems,
     fuel = fuelItems,
+    scrap = scrapItems,
+    furniture = furnitureItems,
     armor = {
         "Leather Body", "Iron Body", "Thorn Body"
     },
-    ["guns/ammo"] = {
-        "Rifle", "Revolver", "Raygun", "Tactical Shotgun", "Revolver Ammo", "Rifle Ammo"
-    },
-    materials = {
-        "Log", "Coal", "Fuel Canister", "UFO Junk", "UFO Component", "Bandage", "MedKit",
-        "Old Car Engine", "Broken Fan", "Old Microwave", "Old Radio", "Sheet Metal"
-    },
     pelts = {
         "Alpha Wolf Pelt", "Bear Pelt", "Wolf Pelt", "Bunny Foot"
-    },
-    misc_tools = {
-        "Good Sack", "Old Flashlight", "Old Radio", "Giant Sack", "Strong Flashlight", "Chainsaw"
     }
 }
 

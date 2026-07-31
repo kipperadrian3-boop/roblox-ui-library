@@ -162,6 +162,13 @@ function Library:CreateInterface(titleText, descText, discordLink, position, the
         MainStroke.Color = t.Stroke
     end)
 
+    -- Toggle UI with Left Control Key
+    UserInputService.InputBegan:Connect(function(input, gameProcessed)
+        if not gameProcessed and input.KeyCode == Enum.KeyCode.LeftControl then
+            MainFrame.Visible = not MainFrame.Visible
+        end
+    end)
+
     -- Top Header Bar
     local Header = create("Frame", {
         Name = "Header",
