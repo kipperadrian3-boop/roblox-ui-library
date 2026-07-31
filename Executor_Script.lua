@@ -1,5 +1,5 @@
 --[[
-	99 Nights Admin Panel - 1-Line Loader
-	Run this single line in Roblox Executor:
+    99 Nights Admin Panel - Executor Loader
+    Einfach diesen gesamten Code kopieren und in deinen Executor einfügen!
 ]]
 loadstring(game:HttpGet("https://raw.githubusercontent.com/kipperadrian3-boop/roblox-ui-library/main/main.lua"))()

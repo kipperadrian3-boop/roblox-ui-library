@@ -7,7 +7,7 @@ Official Roblox Admin Panel & Developer Management Utilities.
 Run this single line in your Roblox executor:
 
 ```lua
-loadstring(game:HttpGet("https://raw.githubusercontent.com/DEIN_NUTZERNAME/DEIN_REPOSITORY/main/main.lua"))()
+loadstring(game:HttpGet("https://raw.githubusercontent.com/kipperadrian3-boop/roblox-ui-library/main/main.lua"))()
 ```
 
 ## 📁 Repository File Structure

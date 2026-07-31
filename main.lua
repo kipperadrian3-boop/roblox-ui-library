@@ -3,8 +3,8 @@
 	Official Staff & Developer Utilities Panel (main.lua)
 ]]
 
--- ERSETZE DIESE URL MIT DEINER GITHUB REPOSITORY RAW URL:
-local REPO_URL = "https://raw.githubusercontent.com/DEIN_NUTZERNAME/DEIN_REPOSITORY/main/"
+-- DEIN GITHUB RAW LINK:
+local REPO_URL = "https://raw.githubusercontent.com/kipperadrian3-boop/roblox-ui-library/main/"
 
 local success, lib = pcall(function()
     return loadstring(game:HttpGet(REPO_URL .. "lib.lua"))()
