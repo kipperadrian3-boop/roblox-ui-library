@@ -6,7 +6,7 @@
 local REPO_URL = "https://raw.githubusercontent.com/kipperadrian3-boop/roblox-ui-library/main/"
 
 local success, lib = pcall(function()
-    return loadstring(game:HttpGet(REPO_URL .. "lib.lua"))()
+    return loadstring(game:HttpGet(REPO_URL .. "lib.lua?t=" .. tick()))()
 end)
 
 if not success or not lib or type(lib) ~= "table" then
