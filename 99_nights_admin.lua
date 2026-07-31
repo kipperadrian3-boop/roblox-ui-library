@@ -18,7 +18,7 @@ local int = lib:CreateInterface("99 Nights Admin Panel", "Admin & Management Sui
 
 local main = int:CreateTab("Main", "Main Admin Controls & Utilities", "default", true)
 local autofarmss = int:CreateTab("Automation", "Automated Maintenance & Resource Systems", "op")
-local itemtp = int:CreateTab("Item Manager", "Item Teleports & Visual Trackers", "item")
+local itemtp = int:CreateTab("Bring", "Item Teleports & Resource Fetchers", "item")
 local gametp = int:CreateTab("Location TP", "Map & Landmark Teleports", "info")
 local charactertp = int:CreateTab("Mob Manager", "Entity & Mob Teleports", "npc")
 local plr = int:CreateTab("Player Admin", "Local Player Modifiers", "player")
@@ -367,6 +367,31 @@ for _, itemName in ipairs(possibleItems) do
         teleportItem(itemName)
     end)
 end
+
+-- Fetch Scrap Items (Bulk)
+local scrapItems = {
+    "Bolt",
+    "Broken Fan",
+    "Old Radio",
+    "Sheet Metal",
+    "Washing Machine",
+    "Broken Microwave"
+}
+
+local bringScrap = itemtp:CreateDropDown("Fetch Scrap Items (Scrap Bulk):")
+
+bringScrap:AddButton("⚡ Bring ALL Scrap Items", function()
+    for _, scrapName in ipairs(scrapItems) do
+        teleportItem(scrapName)
+    end
+end)
+
+for _, scrapName in ipairs(scrapItems) do
+    bringScrap:AddButton("Fetch " .. scrapName, function()
+        teleportItem(scrapName)
+    end)
+end
+
 
 
 -- Fetch Mob to Admin Position
@@ -871,6 +896,9 @@ local bracket = {
     },
     pelts = {
         "Alpha Wolf Pelt", "Bear Pelt", "Wolf Pelt", "Bunny Foot"
+    },
+    scrap = {
+        "Bolt", "Broken Fan", "Old Radio", "Sheet Metal", "Washing Machine", "Broken Microwave"
     },
     misc_tools = {
         "Good Sack", "Old Flashlight", "Old Radio", "Giant Sack", "Strong Flashlight", "Chainsaw"
