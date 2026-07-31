@@ -383,6 +383,34 @@ for _, scrapName in ipairs(scrapItems) do
     end)
 end
 
+-- Fetch Consumable Items (Official Wiki Consumables List)
+local consumableItems = {
+    "Carrot", "Corn", "Pumpkin", "Berry",
+    "Apple", "Morsel", "Cooked Morsel", "Steak",
+    "Cooked Steak", "Ribs", "Cooked Ribs", "Cake",
+    "Chili", "Stew", "Hearty Stew", "Meat Sandwich",
+    "Seafood Chowder", "Steak Dinner", "Pumpkin Soup", "BBQ Ribs",
+    "Carrot Cake", "Jar o' Jelly", "Candy Apple", "Candy Corn",
+    "Pumpkin Pie", "Cotton Candy", "Mackerel", "Salmon",
+    "Jellyfish", "Clownfish", "Char", "Eel",
+    "Swordfish", "Shark", "Lava Eel", "Lionfish",
+    "Bandage", "MedKit", "Seasoning"
+}
+
+local bringConsumables = itemtp:CreateDropDown("Fetch Consumable Items (Consumables Bulk):")
+
+bringConsumables:AddButton("⚡ Bring ALL Consumable Items", function()
+    for _, consumableName in ipairs(consumableItems) do
+        teleportItem(consumableName)
+    end
+end)
+
+for _, consumableName in ipairs(consumableItems) do
+    bringConsumables:AddButton("Fetch " .. consumableName, function()
+        teleportItem(consumableName)
+    end)
+end
+
 -- Fetch Fuel Items (Official Wiki Fuel List)
 local fuelItems = {
     "Log", "Chair", "Biofuel", "Coal",
@@ -828,15 +856,10 @@ end)
 itemtp:CreateComment("Category Item Fetchers:")
 
 local bracket = {
-    weapons = {
-        "Laser Sword", "Raygun", "Kunai", "Katana", "Spear"
-    },
-    minifoods = {
-        "Apple", "Berry", "Carrot"
-    },
-    meat = {
-        "Steak", "Cooked Steak", "Cooked Morsel" , "Morsel"
-    },
+    consumables = consumableItems,
+    weapons = weaponItems,
+    scrap = scrapItems,
+    fuel = fuelItems,
     armor = {
         "Leather Body", "Iron Body", "Thorn Body"
     },
@@ -850,9 +873,6 @@ local bracket = {
     pelts = {
         "Alpha Wolf Pelt", "Bear Pelt", "Wolf Pelt", "Bunny Foot"
     },
-    weapons = weaponItems,
-    scrap = scrapItems,
-    fuel = fuelItems,
     misc_tools = {
         "Good Sack", "Old Flashlight", "Old Radio", "Giant Sack", "Strong Flashlight", "Chainsaw"
     }
