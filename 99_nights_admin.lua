@@ -253,59 +253,28 @@ local itemsFolder = workspace:WaitForChild("Items")
 local remoteEvents = ReplicatedStorage:WaitForChild("RemoteEvents")
 
 local possibleItems = {
-    "Alien Chest",
-    "Alpha Wolf Pelt",
-    "Anvil Front",
-    "Anvil Back",
-    "Apple",
-    "Bandage",
-    "Bear Corpse",
-    "Bear Pelt",
-    "Berry",
-    "Biofuel",
-    "Bolt",
-    "Broken Fan",
-    "Bunny Foot",
-    "Carrot",
-    "Coal",
-    "Coin Stack",
-    "Cooked Morsel",
-    "Cooked Steak",
-    "Chainsaw",
-    "Cultist",
-    "Cultist Gem",
-    "Flower",
-    "Fuel Canister",
-    "Hologram Emitter",
-    "Item Chest",
-    "Laser Fence Blueprint",
-    "Leather Body",
-    "Iron Body",
-    "Thorn Body",
-    "Log",
-    "MedKit",
-    "Morsel",
-    "Old Flashlight",
-    "Old Radio",
-    "Good Sack",
-    "Good Axe",
-    "Raygun",
-    "Giant Sack",
-    "Strong Axe",
-    "Oil Barrel",
-    "Old Car Engine",
-    "Rifle",
-    "Rifle Ammo",
-    "Revolver",
-    "Revolver Ammo",
-    "Sapling",
-    "Sheet Metal",
-    "Steak",
-    "Wolf Pelt",
-    "Gem of the Forest Fragment",
-    "Tyre",
-    "Washing Machine",
-    "Broken Microwave"
+    "Alien Chest", "Alpha Wolf Pelt", "Anvil Front", "Anvil Back",
+    "Apple", "Bandage", "Bear Corpse", "Bear Pelt",
+    "Berry", "Biofuel", "Bolt", "Broken Fan",
+    "Bunny Foot", "Carrot", "Coal", "Coin Stack",
+    "Cooked Morsel", "Cooked Steak", "Chainsaw", "Cultist",
+    "Cultist Gem", "Flower", "Fuel Canister", "Hologram Emitter",
+    "Item Chest", "Laser Fence Blueprint", "Leather Body", "Iron Body",
+    "Thorn Body", "Log", "MedKit", "Morsel",
+    "Old Flashlight", "Old Radio", "Good Sack", "Good Axe",
+    "Raygun", "Giant Sack", "Strong Axe", "Oil Barrel",
+    "Old Car Engine", "Rifle", "Rifle Ammo", "Revolver",
+    "Revolver Ammo", "Sapling", "Sheet Metal", "Steak",
+    "Wolf Pelt", "Gem of the Forest Fragment", "Tyre", "Washing Machine",
+    "Broken Microwave", "Spear", "Katana", "Morningstar",
+    "Laser Sword", "Ice Sword", "Trident", "Poison Spear",
+    "Infernal Sword", "Cultist King Mace", "Blowpipe", "Obsidiron Hammer",
+    "Scythe", "Vampire Scythe", "Tactical Shotgun", "Snowball",
+    "Frozen Shuriken", "Kunai", "Ray Gun", "Laser Cannon",
+    "Flamethrower", "Crossbow", "Wildfire", "Infernal Crossbow",
+    "Shotgun Ammo", "Old Axe", "Strong Flashlight", "Admin Sack",
+    "Hammer", "Fishing Rod", "Metal Chair", "Cultist Prototype",
+    "UFO Scrap", "UFO Junk", "UFO Component"
 }
 
 local bringitemtoyou = itemtp:CreateDropDown("Fetch Items to Admin (Bulk):")
@@ -367,22 +336,37 @@ for _, itemName in ipairs(possibleItems) do
     end)
 end
 
+-- Fetch Weapons Items (Official Wiki Weapons List)
+local weaponItems = {
+    "Spear", "Katana", "Morningstar", "Laser Sword",
+    "Ice Sword", "Trident", "Poison Spear", "Infernal Sword",
+    "Cultist King Mace", "Blowpipe", "Obsidiron Hammer", "Scythe",
+    "Vampire Scythe", "Revolver", "Rifle", "Tactical Shotgun",
+    "Snowball", "Frozen Shuriken", "Kunai", "Ray Gun",
+    "Laser Cannon", "Flamethrower", "Crossbow", "Wildfire",
+    "Infernal Crossbow"
+}
+
+local bringWeapons = itemtp:CreateDropDown("Fetch Weapons Items (Weapons Bulk):")
+
+bringWeapons:AddButton("⚡ Bring ALL Weapons Items", function()
+    for _, weaponName in ipairs(weaponItems) do
+        teleportItem(weaponName)
+    end
+end)
+
+for _, weaponName in ipairs(weaponItems) do
+    bringWeapons:AddButton("Fetch " .. weaponName, function()
+        teleportItem(weaponName)
+    end)
+end
+
 -- Fetch Scrap Items (Official Wiki Scrap List)
 local scrapItems = {
-    "Bolt",
-    "Sheet Metal",
-    "UFO Junk",
-    "UFO Component",
-    "Broken Fan",
-    "Old Radio",
-    "Broken Microwave",
-    "Tyre",
-    "Metal Chair",
-    "Old Car Engine",
-    "Washing Machine",
-    "Cultist Experiment",
-    "Cultist Prototype",
-    "UFO Scrap"
+    "Bolt", "Sheet Metal", "UFO Junk", "UFO Component",
+    "Broken Fan", "Old Radio", "Broken Microwave", "Tyre",
+    "Metal Chair", "Old Car Engine", "Washing Machine", "Cultist Experiment",
+    "Cultist Prototype", "UFO Scrap"
 }
 
 local bringScrap = itemtp:CreateDropDown("Fetch Scrap Items (Scrap Bulk):")
@@ -401,21 +385,10 @@ end
 
 -- Fetch Fuel Items (Official Wiki Fuel List)
 local fuelItems = {
-    "Log",
-    "Chair",
-    "Biofuel",
-    "Coal",
-    "Fuel Canister",
-    "Oil Barrel",
-    "Cultist Corpse",
-    "Crossbow Cultist Corpse",
-    "Juggernaut Cultist Corpse",
-    "Cultist King Corpse",
-    "Alien Corpse",
-    "Elite Alien Corpse",
-    "Wolf Corpse",
-    "Alpha Wolf Corpse",
-    "Bear Corpse"
+    "Log", "Chair", "Biofuel", "Coal",
+    "Fuel Canister", "Oil Barrel", "Cultist Corpse", "Crossbow Cultist Corpse",
+    "Juggernaut Cultist Corpse", "Cultist King Corpse", "Alien Corpse", "Elite Alien Corpse",
+    "Wolf Corpse", "Alpha Wolf Corpse", "Bear Corpse"
 }
 
 local bringFuel = itemtp:CreateDropDown("Fetch Fuel Items (Fuel Bulk):")
@@ -877,6 +850,7 @@ local bracket = {
     pelts = {
         "Alpha Wolf Pelt", "Bear Pelt", "Wolf Pelt", "Bunny Foot"
     },
+    weapons = weaponItems,
     scrap = scrapItems,
     fuel = fuelItems,
     misc_tools = {
