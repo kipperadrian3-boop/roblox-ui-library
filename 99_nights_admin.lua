@@ -367,14 +367,22 @@ for _, itemName in ipairs(possibleItems) do
     end)
 end
 
--- Fetch Scrap Items (Bulk)
+-- Fetch Scrap Items (Official Wiki Scrap List)
 local scrapItems = {
     "Bolt",
+    "Sheet Metal",
+    "UFO Junk",
+    "UFO Component",
     "Broken Fan",
     "Old Radio",
-    "Sheet Metal",
+    "Broken Microwave",
+    "Tyre",
+    "Metal Chair",
+    "Old Car Engine",
     "Washing Machine",
-    "Broken Microwave"
+    "Cultist Experiment",
+    "Cultist Prototype",
+    "UFO Scrap"
 }
 
 local bringScrap = itemtp:CreateDropDown("Fetch Scrap Items (Scrap Bulk):")
@@ -388,6 +396,39 @@ end)
 for _, scrapName in ipairs(scrapItems) do
     bringScrap:AddButton("Fetch " .. scrapName, function()
         teleportItem(scrapName)
+    end)
+end
+
+-- Fetch Fuel Items (Official Wiki Fuel List)
+local fuelItems = {
+    "Log",
+    "Chair",
+    "Biofuel",
+    "Coal",
+    "Fuel Canister",
+    "Oil Barrel",
+    "Cultist Corpse",
+    "Crossbow Cultist Corpse",
+    "Juggernaut Cultist Corpse",
+    "Cultist King Corpse",
+    "Alien Corpse",
+    "Elite Alien Corpse",
+    "Wolf Corpse",
+    "Alpha Wolf Corpse",
+    "Bear Corpse"
+}
+
+local bringFuel = itemtp:CreateDropDown("Fetch Fuel Items (Fuel Bulk):")
+
+bringFuel:AddButton("⚡ Bring ALL Fuel Items", function()
+    for _, fuelName in ipairs(fuelItems) do
+        teleportItem(fuelName)
+    end
+end)
+
+for _, fuelName in ipairs(fuelItems) do
+    bringFuel:AddButton("Fetch " .. fuelName, function()
+        teleportItem(fuelName)
     end)
 end
 
@@ -836,9 +877,8 @@ local bracket = {
     pelts = {
         "Alpha Wolf Pelt", "Bear Pelt", "Wolf Pelt", "Bunny Foot"
     },
-    scrap = {
-        "Bolt", "Broken Fan", "Old Radio", "Sheet Metal", "Washing Machine", "Broken Microwave"
-    },
+    scrap = scrapItems,
+    fuel = fuelItems,
     misc_tools = {
         "Good Sack", "Old Flashlight", "Old Radio", "Giant Sack", "Strong Flashlight", "Chainsaw"
     }
@@ -908,9 +948,9 @@ local campfireDropPos = Vector3.new(0, 19, 0)
 local machineDropPos = Vector3.new(21, 16, -5)
 
 -- === ITEM LISTS ===
-local campfireFuelItems = {"Log", "Coal", "Fuel Canister", "Oil Barrel", "Biofuel"}
+local campfireFuelItems = fuelItems
 local autocookItems = {"Morsel", "Steak"}
-local autoGrindItems = {"UFO Junk", "UFO Component", "Old Car Engine", "Broken Fan", "Old Microwave", "Bolt", "Log", "Cultist Gem", "Sheet Metal", "Old Radio","Tyre","Washing Machine", "Cultist Experiment", "Cultist Component", "Gem of the Forest Fragment", "Broken Microwave"}
+local autoGrindItems = scrapItems
 local autoEatFoods = {"Cooked Steak", "Cooked Morsel", "Berry", "Carrot", "Apple"}
 local biofuelItems = {"Carrot", "Cooked Morsel", "Morsel", "Steak", "Cooked Steak", "Log"}
 
