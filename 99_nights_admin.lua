@@ -24,6 +24,7 @@ local charactertp = int:CreateTab("Mob Manager", "Entity & Mob Teleports", "npc"
 local plr = int:CreateTab("Player Admin", "Local Player Modifiers", "player")
 local vis = int:CreateTab("Visual Tools", "Player & Object Visual Trackers", "visuals")
 local misc = int:CreateTab("Admin Tools", "Developer Console & Extra Scripts", "misc")
+local themesTab = int:CreateTab("UI Themes", "Customize UI appearance and color scheme", "themes")
 
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
@@ -973,6 +974,7 @@ local function moveItemToPos(item, position)
 end
 
 local autofarmss = autofarmss or main
+autofarmss:CreateComment("Automated Maintenance & Resource Systems:")
 local function createDropdownWithCheckboxes(title, itemList, enabledTable)
     local dropdown = autofarmss:CreateDropDown(title)
     for _, itemName in ipairs(itemList) do
@@ -1330,3 +1332,25 @@ strongholdDropdown:AddButton("Teleport to Diamond Chest", function()
         warn("HumanoidRootPart not found!")
     end
 end)
+
+-- === UI Themes Selector ===
+themesTab:CreateComment("Select a visual theme for the Admin Panel (Instant Live Switch):")
+
+local themeDropdown = themesTab:CreateDropDown("Theme Selector")
+local availableThemes = {
+    {"Royal Purple", "royal"},
+    {"Dark Onyx", "dark"},
+    {"Emerald Forest", "emerald"},
+    {"Cyber Neon", "cyber"},
+    {"Midnight Rose", "midnight"},
+    {"Blood Crimson", "blood"},
+    {"Gold Amber", "gold"},
+    {"Neon Vapor", "neon"}
+}
+
+for _, t in ipairs(availableThemes) do
+    themeDropdown:AddButton(t[1], function()
+        int:SetTheme(t[2])
+    end)
+end
+

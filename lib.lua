@@ -1,6 +1,7 @@
 --[[
     99 Nights Admin Suite - Custom UI Library (lib.lua)
-    Supports Themes (royal, dark, emerald, cyber, midnight)
+    Supports Themes (royal, dark, emerald, cyber, midnight, blood, gold, neon)
+    Features: Dynamic Theme Switching, Searchable Dropdowns, Clickable Checkbox Labels
 ]]
 
 local TweenService = game:GetService("TweenService")
@@ -66,6 +67,39 @@ local DefaultThemes = {
         Stroke = Color3.fromRGB(70, 40, 75),
         TextColor = Color3.fromRGB(245, 240, 250),
         SubText = Color3.fromRGB(150, 140, 165)
+    },
+    blood = {
+        MainBg = Color3.fromRGB(24, 14, 16),
+        HeaderBg = Color3.fromRGB(16, 8, 10),
+        SidebarBg = Color3.fromRGB(16, 8, 10),
+        CardBg = Color3.fromRGB(34, 18, 22),
+        Accent = Color3.fromRGB(220, 40, 50),
+        AccentText = Color3.fromRGB(255, 255, 255),
+        Stroke = Color3.fromRGB(80, 30, 35),
+        TextColor = Color3.fromRGB(250, 240, 242),
+        SubText = Color3.fromRGB(175, 135, 140)
+    },
+    gold = {
+        MainBg = Color3.fromRGB(24, 22, 16),
+        HeaderBg = Color3.fromRGB(16, 14, 10),
+        SidebarBg = Color3.fromRGB(16, 14, 10),
+        CardBg = Color3.fromRGB(34, 30, 20),
+        Accent = Color3.fromRGB(230, 175, 40),
+        AccentText = Color3.fromRGB(20, 15, 5),
+        Stroke = Color3.fromRGB(85, 70, 30),
+        TextColor = Color3.fromRGB(250, 245, 235),
+        SubText = Color3.fromRGB(175, 160, 130)
+    },
+    neon = {
+        MainBg = Color3.fromRGB(18, 12, 28),
+        HeaderBg = Color3.fromRGB(12, 8, 20),
+        SidebarBg = Color3.fromRGB(12, 8, 20),
+        CardBg = Color3.fromRGB(28, 18, 42),
+        Accent = Color3.fromRGB(50, 255, 150),
+        AccentText = Color3.fromRGB(10, 20, 15),
+        Stroke = Color3.fromRGB(100, 40, 180),
+        TextColor = Color3.fromRGB(245, 240, 255),
+        SubText = Color3.fromRGB(165, 140, 195)
     }
 }
 
@@ -99,6 +133,8 @@ function Library:CreateInterface(titleText, descText, discordLink, position, the
         end
     end
 
+    local themeUpdaters = {}
+
     local ScreenGui = create("ScreenGui", {
         Name = "AdminSuiteUI",
         ResetOnSpawn = false,
@@ -119,7 +155,12 @@ function Library:CreateInterface(titleText, descText, discordLink, position, the
     })
 
     create("UICorner", { CornerRadius = UDim.new(0, 10), Parent = MainFrame })
-    create("UIStroke", { Color = theme.Stroke, Thickness = 1.5, Parent = MainFrame })
+    local MainStroke = create("UIStroke", { Color = theme.Stroke, Thickness = 1.5, Parent = MainFrame })
+
+    table.insert(themeUpdaters, function(t)
+        MainFrame.BackgroundColor3 = t.MainBg
+        MainStroke.Color = t.Stroke
+    end)
 
     -- Top Header Bar
     local Header = create("Frame", {
@@ -157,6 +198,12 @@ function Library:CreateInterface(titleText, descText, discordLink, position, the
         Parent = Header
     })
 
+    table.insert(themeUpdaters, function(t)
+        Header.BackgroundColor3 = t.HeaderBg
+        TitleLabel.TextColor3 = t.TextColor
+        SubtitleLabel.TextColor3 = t.SubText
+    end)
+
     -- Close Button
     local CloseBtn = create("TextButton", {
         Name = "CloseBtn",
@@ -188,6 +235,12 @@ function Library:CreateInterface(titleText, descText, discordLink, position, the
             Parent = Header
         })
         create("UICorner", { CornerRadius = UDim.new(0, 6), Parent = DiscordBtn })
+
+        table.insert(themeUpdaters, function(t)
+            DiscordBtn.BackgroundColor3 = t.Accent
+            DiscordBtn.TextColor3 = t.AccentText
+        end)
+
         DiscordBtn.MouseButton1Click:Connect(function()
             if setclipboard then
                 setclipboard(discordLink)
@@ -224,6 +277,10 @@ function Library:CreateInterface(titleText, descText, discordLink, position, the
         Parent = TabBar
     })
 
+    table.insert(themeUpdaters, function(t)
+        TabBar.BackgroundColor3 = t.SidebarBg
+    end)
+
     -- Content Container (Right side)
     local ContentFolder = create("Folder", {
         Name = "ContentFolder",
@@ -239,6 +296,19 @@ function Library:CreateInterface(titleText, descText, discordLink, position, the
         ActiveTab = nil,
         Theme = theme
     }
+
+    function InterfaceObj:SetTheme(newThemeName)
+        local key = tostring(newThemeName or "royal"):lower()
+        local t = DefaultThemes[key] or DefaultThemes.royal
+        InterfaceObj.Theme = t
+        theme = t
+        for _, updater in ipairs(themeUpdaters) do
+            pcall(updater, t)
+        end
+        if InterfaceObj.ActiveTab and InterfaceObj.ActiveTab.Activate then
+            InterfaceObj.ActiveTab.Activate()
+        end
+    end
 
     function InterfaceObj:CreateTab(tabName, tabDesc, icon, isDefault)
         local TabBtn = create("TextButton", {
@@ -288,16 +358,27 @@ function Library:CreateInterface(titleText, descText, discordLink, position, the
         local function activateTab()
             for _, t in pairs(InterfaceObj.Tabs) do
                 t.TabContent.Visible = false
-                t.TabBtn.BackgroundColor3 = theme.CardBg
-                t.TabBtn.TextColor3 = theme.SubText
+                t.TabBtn.BackgroundColor3 = InterfaceObj.Theme.CardBg
+                t.TabBtn.TextColor3 = InterfaceObj.Theme.SubText
             end
             TabContent.Visible = true
-            TabBtn.BackgroundColor3 = theme.Accent
-            TabBtn.TextColor3 = theme.AccentText
+            TabBtn.BackgroundColor3 = InterfaceObj.Theme.Accent
+            TabBtn.TextColor3 = InterfaceObj.Theme.AccentText
             InterfaceObj.ActiveTab = TabObj
         end
+        TabObj.Activate = activateTab
 
         TabBtn.MouseButton1Click:Connect(activateTab)
+
+        table.insert(themeUpdaters, function(t)
+            if InterfaceObj.ActiveTab == TabObj then
+                TabBtn.BackgroundColor3 = t.Accent
+                TabBtn.TextColor3 = t.AccentText
+            else
+                TabBtn.BackgroundColor3 = t.CardBg
+                TabBtn.TextColor3 = t.SubText
+            end
+        end)
 
         table.insert(InterfaceObj.Tabs, TabObj)
 
@@ -312,7 +393,7 @@ function Library:CreateInterface(titleText, descText, discordLink, position, the
 
             local Card = create("Frame", {
                 Size = UDim2.new(1, 0, 0, 36),
-                BackgroundColor3 = theme.CardBg,
+                BackgroundColor3 = InterfaceObj.Theme.CardBg,
                 BorderSizePixel = 0,
                 Parent = TabContent
             })
@@ -323,7 +404,7 @@ function Library:CreateInterface(titleText, descText, discordLink, position, the
                 Position = UDim2.new(0, 12, 0, 0),
                 BackgroundTransparency = 1,
                 Text = labelTitle,
-                TextColor3 = theme.TextColor,
+                TextColor3 = InterfaceObj.Theme.TextColor,
                 TextSize = 13,
                 Font = Enum.Font.Gotham,
                 TextXAlignment = Enum.TextXAlignment.Left,
@@ -333,7 +414,7 @@ function Library:CreateInterface(titleText, descText, discordLink, position, the
             local ToggleBox = create("TextButton", {
                 Size = UDim2.new(0, 24, 0, 24),
                 Position = UDim2.new(1, -32, 0.5, -12),
-                BackgroundColor3 = theme.MainBg,
+                BackgroundColor3 = InterfaceObj.Theme.MainBg,
                 Text = "",
                 Parent = Card
             })
@@ -342,19 +423,35 @@ function Library:CreateInterface(titleText, descText, discordLink, position, the
             local Indicator = create("Frame", {
                 Size = UDim2.new(0, 14, 0, 14),
                 Position = UDim2.new(0.5, -7, 0.5, -7),
-                BackgroundColor3 = theme.Accent,
+                BackgroundColor3 = InterfaceObj.Theme.Accent,
                 Visible = false,
                 Parent = ToggleBox
             })
             create("UICorner", { CornerRadius = UDim.new(0, 3), Parent = Indicator })
 
-            ToggleBox.MouseButton1Click:Connect(function()
+            local function toggleState()
                 state = not state
                 Indicator.Visible = state
-                ToggleBox.BackgroundColor3 = state and theme.Accent or theme.MainBg
+                ToggleBox.BackgroundColor3 = state and InterfaceObj.Theme.Accent or InterfaceObj.Theme.MainBg
                 if callback then
                     pcall(callback, state)
                 end
+            end
+
+            ToggleBox.MouseButton1Click:Connect(toggleState)
+
+            -- Enable clicking text label / card to toggle
+            Label.InputBegan:Connect(function(input)
+                if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+                    toggleState()
+                end
+            end)
+
+            table.insert(themeUpdaters, function(t)
+                Card.BackgroundColor3 = t.CardBg
+                Label.TextColor3 = t.TextColor
+                ToggleBox.BackgroundColor3 = state and t.Accent or t.MainBg
+                Indicator.BackgroundColor3 = t.Accent
             end)
 
             return Card
@@ -369,7 +466,7 @@ function Library:CreateInterface(titleText, descText, discordLink, position, the
 
             local Card = create("Frame", {
                 Size = UDim2.new(1, 0, 0, 52),
-                BackgroundColor3 = theme.CardBg,
+                BackgroundColor3 = InterfaceObj.Theme.CardBg,
                 BorderSizePixel = 0,
                 Parent = TabContent
             })
@@ -380,7 +477,7 @@ function Library:CreateInterface(titleText, descText, discordLink, position, the
                 Position = UDim2.new(0, 12, 0, 4),
                 BackgroundTransparency = 1,
                 Text = labelTitle,
-                TextColor3 = theme.TextColor,
+                TextColor3 = InterfaceObj.Theme.TextColor,
                 TextSize = 13,
                 Font = Enum.Font.Gotham,
                 TextXAlignment = Enum.TextXAlignment.Left,
@@ -392,7 +489,7 @@ function Library:CreateInterface(titleText, descText, discordLink, position, the
                 Position = UDim2.new(0.72, 0, 0, 4),
                 BackgroundTransparency = 1,
                 Text = tostring(defaultVal),
-                TextColor3 = theme.SubText,
+                TextColor3 = InterfaceObj.Theme.SubText,
                 TextSize = 13,
                 Font = Enum.Font.GothamBold,
                 TextXAlignment = Enum.TextXAlignment.Right,
@@ -402,7 +499,7 @@ function Library:CreateInterface(titleText, descText, discordLink, position, the
             local SliderTrack = create("TextButton", {
                 Size = UDim2.new(1, -24, 0, 8),
                 Position = UDim2.new(0, 12, 0, 32),
-                BackgroundColor3 = theme.MainBg,
+                BackgroundColor3 = InterfaceObj.Theme.MainBg,
                 Text = "",
                 Parent = Card
             })
@@ -411,11 +508,19 @@ function Library:CreateInterface(titleText, descText, discordLink, position, the
             local fillPercent = math.clamp((defaultVal - minVal) / (maxVal - minVal), 0, 1)
             local SliderFill = create("Frame", {
                 Size = UDim2.new(fillPercent, 0, 1, 0),
-                BackgroundColor3 = theme.Accent,
+                BackgroundColor3 = InterfaceObj.Theme.Accent,
                 BorderSizePixel = 0,
                 Parent = SliderTrack
             })
             create("UICorner", { CornerRadius = UDim.new(0, 4), Parent = SliderFill })
+
+            table.insert(themeUpdaters, function(t)
+                Card.BackgroundColor3 = t.CardBg
+                Label.TextColor3 = t.TextColor
+                ValueLabel.TextColor3 = t.SubText
+                SliderTrack.BackgroundColor3 = t.MainBg
+                SliderFill.BackgroundColor3 = t.Accent
+            end)
 
             local dragging = false
 
@@ -454,7 +559,7 @@ function Library:CreateInterface(titleText, descText, discordLink, position, the
         function TabObj:CreateComment(text)
             local Card = create("Frame", {
                 Size = UDim2.new(1, 0, 0, 30),
-                BackgroundColor3 = theme.HeaderBg,
+                BackgroundColor3 = InterfaceObj.Theme.HeaderBg,
                 BorderSizePixel = 0,
                 Parent = TabContent
             })
@@ -466,12 +571,17 @@ function Library:CreateInterface(titleText, descText, discordLink, position, the
                 Position = UDim2.new(0, 10, 0, 0),
                 BackgroundTransparency = 1,
                 Text = text or "",
-                TextColor3 = theme.SubText,
+                TextColor3 = InterfaceObj.Theme.SubText,
                 TextSize = 12,
-                Font = Enum.Font.GothamItalic,
+                Font = Enum.Font.Gotham,
                 TextXAlignment = Enum.TextXAlignment.Left,
                 Parent = Card
             })
+
+            table.insert(themeUpdaters, function(t)
+                Card.BackgroundColor3 = t.HeaderBg
+                commentcontent.TextColor3 = t.SubText
+            end)
 
             local CommentObj = {
                 Card = Card,
@@ -490,7 +600,7 @@ function Library:CreateInterface(titleText, descText, discordLink, position, the
 
             local DropCard = create("Frame", {
                 Size = UDim2.new(1, 0, 0, 36),
-                BackgroundColor3 = theme.CardBg,
+                BackgroundColor3 = InterfaceObj.Theme.CardBg,
                 BorderSizePixel = 0,
                 ClipsDescendants = true,
                 Parent = TabContent
@@ -509,7 +619,7 @@ function Library:CreateInterface(titleText, descText, discordLink, position, the
                 Position = UDim2.new(0, 12, 0, 0),
                 BackgroundTransparency = 1,
                 Text = dropTitle,
-                TextColor3 = theme.TextColor,
+                TextColor3 = InterfaceObj.Theme.TextColor,
                 TextSize = 13,
                 Font = Enum.Font.GothamMedium,
                 TextXAlignment = Enum.TextXAlignment.Left,
@@ -521,15 +631,40 @@ function Library:CreateInterface(titleText, descText, discordLink, position, the
                 Position = UDim2.new(1, -28, 0.5, -10),
                 BackgroundTransparency = 1,
                 Text = "▼",
-                TextColor3 = theme.SubText,
+                TextColor3 = InterfaceObj.Theme.SubText,
                 TextSize = 11,
                 Font = Enum.Font.GothamBold,
                 Parent = HeaderBtn
             })
 
+            -- Search Bar inside Dropdown
+            local SearchFrame = create("Frame", {
+                Size = UDim2.new(1, -16, 0, 28),
+                Position = UDim2.new(0, 8, 0, 40),
+                BackgroundColor3 = InterfaceObj.Theme.MainBg,
+                BorderSizePixel = 0,
+                Parent = DropCard
+            })
+            create("UICorner", { CornerRadius = UDim.new(0, 5), Parent = SearchFrame })
+
+            local SearchBox = create("TextBox", {
+                Size = UDim2.new(1, -16, 1, 0),
+                Position = UDim2.new(0, 8, 0, 0),
+                BackgroundTransparency = 1,
+                PlaceholderText = "🔍 Search options...",
+                PlaceholderColor3 = InterfaceObj.Theme.SubText,
+                Text = "",
+                TextColor3 = InterfaceObj.Theme.TextColor,
+                TextSize = 12,
+                Font = Enum.Font.Gotham,
+                TextXAlignment = Enum.TextXAlignment.Left,
+                ClearTextOnFocus = false,
+                Parent = SearchFrame
+            })
+
             local ItemsContainer = create("Frame", {
                 Size = UDim2.new(1, -16, 0, 0),
-                Position = UDim2.new(0, 8, 0, 40),
+                Position = UDim2.new(0, 8, 0, 74),
                 BackgroundTransparency = 1,
                 Parent = DropCard
             })
@@ -539,9 +674,18 @@ function Library:CreateInterface(titleText, descText, discordLink, position, the
                 Parent = ItemsContainer
             })
 
+            table.insert(themeUpdaters, function(t)
+                DropCard.BackgroundColor3 = t.CardBg
+                TitleLabel.TextColor3 = t.TextColor
+                Arrow.TextColor3 = t.SubText
+                SearchFrame.BackgroundColor3 = t.MainBg
+                SearchBox.PlaceholderColor3 = t.SubText
+                SearchBox.TextColor3 = t.TextColor
+            end)
+
             local function updateDropSize()
                 if isOpen then
-                    local totalH = 44 + ItemLayout.AbsoluteContentSize.Y
+                    local totalH = 78 + ItemLayout.AbsoluteContentSize.Y
                     DropCard.Size = UDim2.new(1, 0, 0, totalH)
                     Arrow.Text = "▲"
                 else
@@ -549,6 +693,29 @@ function Library:CreateInterface(titleText, descText, discordLink, position, the
                     Arrow.Text = "▼"
                 end
             end
+
+            local function filterItems()
+                local query = SearchBox.Text:lower()
+                for _, child in ipairs(ItemsContainer:GetChildren()) do
+                    if not child:IsA("UIListLayout") and not child:IsA("UIPadding") then
+                        local itemText = ""
+                        if child:IsA("TextButton") then
+                            itemText = child.Text
+                        else
+                            local label = child:FindFirstChildWhichIsA("TextLabel")
+                            if label then itemText = label.Text end
+                        end
+                        if query == "" or itemText:lower():find(query, 1, true) then
+                            child.Visible = true
+                        else
+                            child.Visible = false
+                        end
+                    end
+                end
+                if isOpen then updateDropSize() end
+            end
+
+            SearchBox:GetPropertyChangedSignal("Text"):Connect(filterItems)
 
             ItemLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
                 if isOpen then updateDropSize() end
@@ -561,20 +728,26 @@ function Library:CreateInterface(titleText, descText, discordLink, position, the
 
             local DropdownObj = {
                 Card = DropCard,
-                ItemsContainer = ItemsContainer
+                ItemsContainer = ItemsContainer,
+                SearchBox = SearchBox
             }
 
             function DropdownObj:AddButton(btnText, btnCallback)
                 local Btn = create("TextButton", {
                     Size = UDim2.new(1, 0, 0, 28),
-                    BackgroundColor3 = theme.MainBg,
+                    BackgroundColor3 = InterfaceObj.Theme.MainBg,
                     Text = btnText,
-                    TextColor3 = theme.TextColor,
+                    TextColor3 = InterfaceObj.Theme.TextColor,
                     TextSize = 12,
                     Font = Enum.Font.Gotham,
                     Parent = ItemsContainer
                 })
                 create("UICorner", { CornerRadius = UDim.new(0, 5), Parent = Btn })
+
+                table.insert(themeUpdaters, function(t)
+                    Btn.BackgroundColor3 = t.MainBg
+                    Btn.TextColor3 = t.TextColor
+                end)
 
                 Btn.MouseButton1Click:Connect(function()
                     if btnCallback then
@@ -589,7 +762,7 @@ function Library:CreateInterface(titleText, descText, discordLink, position, the
 
                 local ChkFrame = create("Frame", {
                     Size = UDim2.new(1, 0, 0, 28),
-                    BackgroundColor3 = theme.MainBg,
+                    BackgroundColor3 = InterfaceObj.Theme.MainBg,
                     Parent = ItemsContainer
                 })
                 create("UICorner", { CornerRadius = UDim.new(0, 5), Parent = ChkFrame })
@@ -599,7 +772,7 @@ function Library:CreateInterface(titleText, descText, discordLink, position, the
                     Position = UDim2.new(0, 10, 0, 0),
                     BackgroundTransparency = 1,
                     Text = chkText,
-                    TextColor3 = theme.TextColor,
+                    TextColor3 = InterfaceObj.Theme.TextColor,
                     TextSize = 12,
                     Font = Enum.Font.Gotham,
                     TextXAlignment = Enum.TextXAlignment.Left,
@@ -609,7 +782,7 @@ function Library:CreateInterface(titleText, descText, discordLink, position, the
                 local ChkBox = create("TextButton", {
                     Size = UDim2.new(0, 18, 0, 18),
                     Position = UDim2.new(1, -24, 0.5, -9),
-                    BackgroundColor3 = theme.CardBg,
+                    BackgroundColor3 = InterfaceObj.Theme.CardBg,
                     Text = "",
                     Parent = ChkFrame
                 })
@@ -618,20 +791,36 @@ function Library:CreateInterface(titleText, descText, discordLink, position, the
                 local Ind = create("Frame", {
                     Size = UDim2.new(0, 10, 0, 10),
                     Position = UDim2.new(0.5, -5, 0.5, -5),
-                    BackgroundColor3 = theme.Accent,
+                    BackgroundColor3 = InterfaceObj.Theme.Accent,
                     Visible = false,
                     Parent = ChkBox
                 })
                 create("UICorner", { CornerRadius = UDim.new(0, 2), Parent = Ind })
 
-                ChkBox.MouseButton1Click:Connect(function()
+                local function toggleChk()
                     chkState = not chkState
                     Ind.Visible = chkState
-                    ChkBox.BackgroundColor3 = chkState and theme.Accent or theme.CardBg
+                    ChkBox.BackgroundColor3 = chkState and InterfaceObj.Theme.Accent or InterfaceObj.Theme.CardBg
                     if chkCallback then
                         pcall(chkCallback, chkState)
                     end
+                end
+
+                ChkBox.MouseButton1Click:Connect(toggleChk)
+                -- Enable clicking text label / row to toggle
+                ChkLabel.InputBegan:Connect(function(input)
+                    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+                        toggleChk()
+                    end
                 end)
+
+                table.insert(themeUpdaters, function(t)
+                    ChkFrame.BackgroundColor3 = t.MainBg
+                    ChkLabel.TextColor3 = t.TextColor
+                    ChkBox.BackgroundColor3 = chkState and t.Accent or t.CardBg
+                    Ind.BackgroundColor3 = t.Accent
+                end)
+
                 return ChkFrame
             end
 
