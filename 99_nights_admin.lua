@@ -975,8 +975,19 @@ local function adminDefenseLoop()
     end
 end
 
--- UI controls for Admin Defense
-main:CreateCheckbox("Admin Defense Radius (Auto-Attack Mobs)", function(state)
+-- Fetch Saplings (Saplings Bulk)
+local bringSaplings = itemtp:CreateDropDown("Fetch Saplings (Saplings Bulk):")
+
+bringSaplings:AddButton("⚡ Bring ALL Saplings", function()
+    teleportItem("Sapling")
+end)
+
+bringLogs:AddButton("⚡ Bring ALL Logs", function()
+    teleportItem("Log")
+end)
+
+-- UI controls for Admin Defense / KillAura
+main:CreateCheckbox("KillAura / Admin Defense (Auto-Attack Mobs)", function(state)
     adminDefenseToggle = state
     if state then
         task.spawn(adminDefenseLoop)
@@ -986,8 +997,8 @@ main:CreateCheckbox("Admin Defense Radius (Auto-Attack Mobs)", function(state)
     end
 end)
 
-main:CreateSlider("Admin Defense Radius Distance", 500, 20, function(value)
-    radius = math.clamp(value, 20, 500)
+main:CreateSlider("KillAura Distance (0 - 500 Studs)", 500, 0, function(value)
+    radius = math.clamp(value, 0, 500)
 end)
 
 
