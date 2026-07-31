@@ -938,29 +938,39 @@ local function unequipTool(tool)
     end
 end
 
--- Admin Defense & KillAura Loop (Targets Mobs, Trees, Ores & Breakables)
+-- Admin Defense & KillAura Loop (Continuous Multi-Target Attacks)
 local function adminDefenseLoop()
+    local currentEquippedTool = nil
+
     while adminDefenseToggle do
         local character = player.Character or player.CharacterAdded:Wait()
         local hrp = character:FindFirstChild("HumanoidRootPart")
+
         if hrp then
             local tool, damageID = getAnyToolWithDamageID()
             if tool and damageID then
-                equipTool(tool)
+                -- Only equip if not already equipped to prevent server-side equip cancellation
+                if currentEquippedTool ~= tool then
+                    currentEquippedTool = tool
+                    equipTool(tool)
+                    task.wait(0.15)
+                end
 
                 -- 1. Attack Mobs & Characters
                 if Workspace:FindFirstChild("Characters") then
                     for _, mob in ipairs(Workspace.Characters:GetChildren()) do
-                        if mob:IsA("Model") then
+                        if mob:IsA("Model") and mob ~= character then
                             local part = mob:FindFirstChildWhichIsA("BasePart")
                             if part and (part.Position - hrp.Position).Magnitude <= radius then
-                                pcall(function()
-                                    RemoteEvents.ToolDamageObject:InvokeServer(
-                                        mob,
-                                        tool,
-                                        damageID,
-                                        CFrame.new(part.Position)
-                                    )
+                                task.spawn(function()
+                                    pcall(function()
+                                        RemoteEvents.ToolDamageObject:InvokeServer(
+                                            mob,
+                                            tool,
+                                            damageID,
+                                            CFrame.new(part.Position)
+                                        )
+                                    end)
                                 end)
                             end
                         end
@@ -982,13 +992,15 @@ local function adminDefenseLoop()
                             if obj:IsA("Model") or obj:IsA("BasePart") then
                                 local part = obj:IsA("BasePart") and obj or obj:FindFirstChildWhichIsA("BasePart")
                                 if part and (part.Position - hrp.Position).Magnitude <= radius then
-                                    pcall(function()
-                                        RemoteEvents.ToolDamageObject:InvokeServer(
-                                            obj,
-                                            tool,
-                                            damageID,
-                                            CFrame.new(part.Position)
-                                        )
+                                    task.spawn(function()
+                                        pcall(function()
+                                            RemoteEvents.ToolDamageObject:InvokeServer(
+                                                obj,
+                                                tool,
+                                                damageID,
+                                                CFrame.new(part.Position)
+                                            )
+                                        end)
                                     end)
                                 end
                             end
@@ -996,14 +1008,18 @@ local function adminDefenseLoop()
                     end
                 end
 
-                task.wait(0.1)
+                task.wait(0.2)
             else
-                warn("No supported tool found in inventory")
+                currentEquippedTool = nil
                 task.wait(1)
             end
         else
             task.wait(0.5)
         end
+    end
+
+    if currentEquippedTool then
+        unequipTool(currentEquippedTool)
     end
 end
 
