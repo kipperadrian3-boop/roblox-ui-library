@@ -1,21 +1,19 @@
 --[[
-    Blade Ball - Exact MoonSec Auto Parry & Combat Suite (blade_ball.lua)
-    Dynamic Ping & Velocity Compensated Auto Parry (Keyless)
+    Blade Ball - Inferno Precision Auto Parry Engine (blade_ball.lua)
+    Exact Physics-Based Dynamic Impact Calculation & Auto Parry/Spam
 ]]
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
-local Stats = game:GetService("Stats")
 local UserInputService = game:GetService("UserInputService")
-local VirtualInputManager = game:GetService("VirtualInputManager")
 local Workspace = game:GetService("Workspace")
 
 local LocalPlayer = Players.LocalPlayer
 
 local REPO_URL = "https://raw.githubusercontent.com/kipperadrian3-boop/roblox-ui-library/main/"
 
--- Load UI Framework
+-- Load UI Library Framework (lib.lua)
 local success, lib = pcall(function()
     return loadstring(game:HttpGet(REPO_URL .. "lib.lua"))()
 end)
@@ -25,254 +23,354 @@ if not success or not lib or type(lib) ~= "table" then
     return
 end
 
-local int = lib:CreateInterface("Blade Ball Suite", "MoonSec Auto Parry & Combat", "https://discord.gg/ZNTHTWx7KE", "bottom left", "royal")
+local int = lib:CreateInterface("Blade Ball Suite", "Inferno Auto Parry Engine", "https://discord.gg/ZNTHTWx7KE", "bottom left", "royal")
 
-local parryTab = int:CreateTab("Auto Parry", "Dynamic Ping & Velocity Deflect", "item", true)
-local spamTab = int:CreateTab("Spam Parry", "Clash & Duel Rapid Parry", "op")
-local abilityTab = int:CreateTab("Auto Ability", "Instant Ability Activation", "player")
-local visualTab = int:CreateTab("Visuals", "Ball ESP & Highlight", "visuals")
+local parryTab = int:CreateTab("Auto Parry", "Physics Impact & Target Deflect", "item", true)
+local spamTab = int:CreateTab("Spam Parry", "Close Fighting & Keybind Spam", "op")
+local chatTab = int:CreateTab("Auto Chat", "Auto GG & Chat Responses", "player")
+local visualTab = int:CreateTab("Visuals", "Future Impact Visualizer", "visuals")
 
--- Config
-local Config = {
-    AutoParry = true,
-    ParryOffset = 15,
-    SpamParry = false,
-    SpamDistance = 20,
-    AutoAbility = false,
-    AbilityDistance = 30,
-    BallHighlight = true,
-    LastParry = 0
-}
+-- Exact Threshold & Formula Constants
+local BASE_THRESHOLD = 0.2
+local VELOCITY_SCALING_FACTOR_FAST = 0.050
+local VELOCITY_SCALING_FACTOR_SLOW = 0.1
+local IMMEDIATE_PARRY_DISTANCE = 15
 
--- Fetch Local Player Ping in seconds
-local function getPing()
-    local pingValue = 0.05
-    pcall(function()
-        local item = Stats.Network.ServerStatsItem["Data Ping"]
-        if item then
-            pingValue = (item:GetValue() / 1000)
-        end
-    end)
-    return math.clamp(pingValue, 0.02, 0.3)
+local responses = {"lol what", "??", "wdym", "bru what", "mad cuz bad", "skill issue", "cry"}
+local gameEndResponses = {"ggs", "gg :3", "good game", "ggs yall", "wp", "ggs man"}
+local keywords = {"auto parry", "auto", "cheating", "hacking"}
+
+-- State Variables
+local focusedBall = nil
+local distanceVisualizer = nil
+local isRunning = false
+local UseRage = false
+local sliderValue = 20
+local notifyparried = false
+local AutoGG = false
+local AutoResponse = false
+local ggdebounce = false
+local responsedebounce = false
+
+-- Workspace & Remotes Setup
+local ballsFolder = Workspace:WaitForChild("Balls")
+local remotesFolder = ReplicatedStorage:WaitForChild("Remotes")
+local parryButtonPress = remotesFolder:WaitForChild("ParryButtonPress")
+local abilityButtonPress = remotesFolder:WaitForChild("AbilityButtonPress")
+
+local character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+
+LocalPlayer.CharacterAdded:Connect(function(newChar)
+    character = newChar
+end)
+
+-- UI Gradients for Cooldown Check
+local function getUIGradients()
+    local pgui = LocalPlayer:FindFirstChild("PlayerGui")
+    local hotbar = pgui and pgui:FindFirstChild("Hotbar")
+    if hotbar then
+        local uigrad1 = hotbar:FindFirstChild("Block") and hotbar.Block:FindFirstChild("border1") and hotbar.Block.border1:FindFirstChild("UIGradient")
+        local uigrad2 = hotbar:FindFirstChild("Ability") and hotbar.Ability:FindFirstChild("border2") and hotbar.Ability.border2:FindFirstChild("UIGradient")
+        return uigrad1, uigrad2
+    end
+    return nil, nil
 end
 
--- Find Active Real Ball in Workspace
-local function getActiveBall()
-    local ballsFolder = Workspace:FindFirstChild("Balls")
-    if ballsFolder then
-        for _, ball in ipairs(ballsFolder:GetChildren()) do
-            if ball:IsA("BasePart") and (ball:GetAttribute("realBall") == true or ball:GetAttribute("target") ~= nil) then
-                return ball
-            end
+local function isCooldownInEffect(uigradient)
+    if not uigradient then return false end
+    return uigradient.Offset.Y < 0.5
+end
+
+-- Fire Event (Supports both RemoteEvent and BindableEvent)
+local function triggerParry()
+    pcall(function()
+        if parryButtonPress:IsA("BindableEvent") then
+            parryButtonPress:Fire()
+        elseif parryButtonPress:IsA("RemoteEvent") then
+            local camera = Workspace.CurrentCamera
+            local camCF = camera and camera.CFrame or CFrame.new()
+            parryButtonPress:FireServer(0.5, camCF, {}, {Vector2.new(0, 0)})
+        else
+            parryButtonPress:Fire()
         end
-        for _, ball in ipairs(ballsFolder:GetChildren()) do
-            if ball:IsA("BasePart") then return ball end
+    end)
+end
+
+local function triggerAbility()
+    pcall(function()
+        if abilityButtonPress:IsA("BindableEvent") then
+            abilityButtonPress:Fire()
+        elseif abilityButtonPress:IsA("RemoteEvent") then
+            abilityButtonPress:FireServer()
+        else
+            abilityButtonPress:Fire()
+        end
+    end)
+end
+
+-- Focused Ball Selection
+local function chooseNewFocusedBall()
+    local balls = ballsFolder:GetChildren()
+    for _, ball in ipairs(balls) do
+        if ball:GetAttribute("realBall") == true or ball:GetAttribute("target") ~= nil then
+            focusedBall = ball
+            return focusedBall
         end
     end
-
-    -- Fallback search in Workspace root
-    for _, obj in ipairs(Workspace:GetChildren()) do
-        if obj:IsA("BasePart") and (obj.Name == "Ball" or obj:GetAttribute("realBall") == true) then
-            return obj
+    for _, ball in ipairs(balls) do
+        if ball:IsA("Part") or ball:IsA("MeshPart") then
+            focusedBall = ball
+            return focusedBall
         end
     end
-
+    focusedBall = nil
     return nil
 end
 
--- Parry Remote & VIM Execution
-local function getParryRemote()
-    return ReplicatedStorage:FindFirstChild("ParryButtonPress", true)
-        or ReplicatedStorage:FindFirstChild("ParryAttempt", true)
-        or ReplicatedStorage:FindFirstChild("Parry", true)
+-- Dynamic Threshold Formula
+local function getDynamicThreshold(ballVelocityMagnitude)
+    if ballVelocityMagnitude > 60 then
+        return math.max(0.20, BASE_THRESHOLD - (ballVelocityMagnitude * VELOCITY_SCALING_FACTOR_FAST))
+    else
+        return math.min(0.01, BASE_THRESHOLD + (ballVelocityMagnitude * VELOCITY_SCALING_FACTOR_SLOW))
+    end
 end
 
-local function fireParry()
-    local currentTime = tick()
-    if currentTime - Config.LastParry < 0.05 then return end
-    Config.LastParry = currentTime
+-- Exact Time Until Impact Formula
+local function timeUntilImpact(ballVelocity, distanceToPlayer, playerVelocity)
+    if not character or not character:FindFirstChild("HumanoidRootPart") or not focusedBall then return math.huge end
+    local directionToPlayer = (character.HumanoidRootPart.Position - focusedBall.Position).Unit
+    local velocityTowardsPlayer = ballVelocity:Dot(directionToPlayer) - playerVelocity:Dot(directionToPlayer)
+    
+    if velocityTowardsPlayer <= 0 then
+        return math.huge
+    end
+    
+    return (distanceToPlayer - sliderValue) / velocityTowardsPlayer
+end
 
-    -- 1. Fire RemoteEvent with Camera/Vector data
-    pcall(function()
-        local remote = getParryRemote()
-        if remote and remote:IsA("RemoteEvent") then
-            local cam = Workspace.CurrentCamera
-            local camCF = cam and cam.CFrame or CFrame.new()
-            remote:FireServer(0.5, camCF, {}, {Vector2.new(0, 0)})
+-- Check if Ball is targeting LocalPlayer
+local function checkIfTarget()
+    for _, v in pairs(ballsFolder:GetChildren()) do
+        if v:IsA("Part") or v:IsA("MeshPart") then
+            if v.BrickColor == BrickColor.new("Really red") or v:GetAttribute("target") == LocalPlayer.Name then
+                return true
+            end
         end
-    end)
+    end
+    return false
+end
 
-    -- 2. Trigger Keypress F via VirtualInputManager
-    pcall(function()
-        VirtualInputManager:SendKeyPressEvent(Enum.KeyCode.F, true, game)
-        task.wait(0.005)
-        VirtualInputManager:SendKeyPressEvent(Enum.KeyCode.F, false, game)
-    end)
+-- Distance Visualizer Part
+local function updateDistanceVisualizer()
+    local charPos = character and character.PrimaryPart and character.PrimaryPart.Position
+    if charPos and focusedBall and focusedBall.Parent then
+        if not distanceVisualizer or not distanceVisualizer.Parent then
+            distanceVisualizer = Instance.new("Part")
+            distanceVisualizer.Name = "ParryImpactVisualizer"
+            distanceVisualizer.Size = Vector3.new(1.5, 1.5, 1.5)
+            distanceVisualizer.Shape = Enum.PartType.Ball
+            distanceVisualizer.Color = Color3.fromRGB(0, 255, 150)
+            distanceVisualizer.Material = Enum.Material.Neon
+            distanceVisualizer.Anchored = true
+            distanceVisualizer.CanCollide = false
+            distanceVisualizer.Parent = Workspace
+        end
 
-    -- 3. Firesignal UI Button Fallback
-    pcall(function()
-        if type(firesignal) == "function" then
-            local pgui = LocalPlayer:FindFirstChild("PlayerGui")
-            local blockBtn = pgui and pgui:FindFirstChild("Block", true)
-            if blockBtn then
-                if blockBtn:FindFirstChild("MouseButton1Click") then
-                    firesignal(blockBtn.MouseButton1Click)
-                elseif blockBtn:FindFirstChild("Activated") then
-                    firesignal(blockBtn.Activated)
+        local timeToImpactValue = timeUntilImpact(focusedBall.Velocity, (focusedBall.Position - charPos).Magnitude, character.PrimaryPart.Velocity)
+        if timeToImpactValue ~= math.huge then
+            local ballFuturePosition = focusedBall.Position + (focusedBall.Velocity * timeToImpactValue)
+            distanceVisualizer.Position = ballFuturePosition
+        end
+    elseif distanceVisualizer then
+        distanceVisualizer:Destroy()
+        distanceVisualizer = nil
+    end
+end
+
+-- Primary Check Loop
+local function checkBallDistance()
+    if not character or not character:FindFirstChild("HumanoidRootPart") or not checkIfTarget() then return end
+
+    local charPos = character.PrimaryPart.Position
+    local charVel = character.PrimaryPart.Velocity
+
+    if focusedBall and not focusedBall.Parent then
+        chooseNewFocusedBall()
+    end
+    if not focusedBall then
+        chooseNewFocusedBall()
+    end
+    if not focusedBall then return end
+
+    local ball = focusedBall
+    local distanceToPlayer = (ball.Position - charPos).Magnitude
+    local ballVelocityTowardsPlayer = ball.Velocity:Dot((charPos - ball.Position).Unit)
+    
+    if distanceToPlayer < IMMEDIATE_PARRY_DISTANCE then
+        triggerParry()
+        task.wait()
+    end
+
+    local uigrad1, uigrad2 = getUIGradients()
+
+    if timeUntilImpact(ball.Velocity, distanceToPlayer, charVel) < getDynamicThreshold(ballVelocityTowardsPlayer) then
+        local hasRage = character:FindFirstChild("Abilities") and (character.Abilities:FindFirstChild("Raging Deflection") or character.Abilities:FindFirstChild("Rapture"))
+        
+        if hasRage and UseRage == true then
+            if uigrad2 and not isCooldownInEffect(uigrad2) then
+                triggerAbility()
+            end
+
+            if uigrad2 and isCooldownInEffect(uigrad2) and uigrad1 and not isCooldownInEffect(uigrad1) then
+                triggerParry()
+                if notifyparried then
+                    lib:Notify("Auto Parry", "Manually Parried Ball (Ability on CD)", 0.5)
                 end
             end
+        elseif not uigrad1 or not isCooldownInEffect(uigrad1) then
+            triggerParry()
+            if notifyparried then
+                lib:Notify("Auto Parry", "Automatically Parried Ball!", 0.5)
+            end
+            task.wait(0.3)
         end
-    end)
+    end
 end
 
-local function fireAbility()
-    pcall(function()
-        local remote = ReplicatedStorage:FindFirstChild("AbilityButtonPress", true)
-            or ReplicatedStorage:FindFirstChild("UseAbility", true)
-        if remote and remote:IsA("RemoteEvent") then
-            remote:FireServer()
-        end
-        VirtualInputManager:SendKeyPressEvent(Enum.KeyCode.Q, true, game)
-        task.wait(0.005)
-        VirtualInputManager:SendKeyPressEvent(Enum.KeyCode.Q, false, game)
-    end)
+-- Auto Parry Loop Coroutine
+local function autoParryCoroutine()
+    while isRunning do
+        checkBallDistance()
+        updateDistanceVisualizer()
+        task.wait()
+    end
+end
+
+local function startAutoParry()
+    chooseNewFocusedBall()
+    isRunning = true
+    local co = coroutine.create(autoParryCoroutine)
+    coroutine.resume(co)
+end
+
+local function stopAutoParry()
+    isRunning = false
+    if distanceVisualizer then
+        distanceVisualizer:Destroy()
+        distanceVisualizer = nil
+    end
 end
 
 
 -- --------------------------------------------------------------------
--- 1. DYNAMIC PING & VELOCITY AUTO PARRY (Exact MoonSec Logic)
+-- UI TAB 1: AUTO PARRY CONTROLS
 -- --------------------------------------------------------------------
-parryTab:CreateCheckbox("Auto Parry (Dynamic Ping)", function(state)
-    Config.AutoParry = state
-end)
-
-parryTab:CreateSlider("Parry Distance Offset", 50, 15, function(val)
-    Config.ParryOffset = val
-end)
-
-RunService.PreRender:Connect(function()
-    if not Config.AutoParry then return end
-
-    pcall(function()
-        local ball = getActiveBall()
-        local char = LocalPlayer.Character
-        local hrp = char and char:FindFirstChild("HumanoidRootPart")
-
-        if ball and hrp then
-            local targetName = ball:GetAttribute("target")
-            local distance = (ball.Position - hrp.Position).Magnitude
-            local speed = ball.AssemblyLinearVelocity.Magnitude
-            local ping = getPing()
-
-            -- Calculate exact required parry distance based on ball speed & network ping
-            local requiredDistance = (speed * (ping + 0.12)) + Config.ParryOffset
-
-            local isTargetingMe = (targetName == LocalPlayer.Name)
-
-            if isTargetingMe and distance <= requiredDistance then
-                fireParry()
-            end
-        end
-    end)
-end)
-
-
--- --------------------------------------------------------------------
--- 2. SPAM PARRY (DUEL / CLASH MODE)
--- --------------------------------------------------------------------
-spamTab:CreateCheckbox("Auto Spam Parry (Clash)", function(state)
-    Config.SpamParry = state
-end)
-
-spamTab:CreateSlider("Clash Distance Trigger", 50, 20, function(val)
-    Config.SpamDistance = val
-end)
-
-RunService.RenderStepped:Connect(function()
-    if not Config.SpamParry then return end
-    pcall(function()
-        local ball = getActiveBall()
-        local char = LocalPlayer.Character
-        local hrp = char and char:FindFirstChild("HumanoidRootPart")
-
-        if ball and hrp then
-            local distance = (ball.Position - hrp.Position).Magnitude
-            local targetName = ball:GetAttribute("target")
-
-            if targetName == LocalPlayer.Name and distance <= Config.SpamDistance then
-                fireParry()
-            end
-        end
-    end)
-end)
-
-
--- --------------------------------------------------------------------
--- 3. AUTO ABILITY
--- --------------------------------------------------------------------
-abilityTab:CreateCheckbox("Auto Activate Ability on Target", function(state)
-    Config.AutoAbility = state
-end)
-
-abilityTab:CreateSlider("Ability Distance Trigger", 80, 30, function(val)
-    Config.AbilityDistance = val
-end)
-
-task.spawn(function()
-    while true do
-        task.wait(0.05)
-        if Config.AutoAbility then
-            pcall(function()
-                local ball = getActiveBall()
-                local char = LocalPlayer.Character
-                local hrp = char and char:FindFirstChild("HumanoidRootPart")
-
-                if ball and hrp then
-                    local distance = (ball.Position - hrp.Position).Magnitude
-                    local targetName = ball:GetAttribute("target")
-                    if targetName == LocalPlayer.Name and distance <= Config.AbilityDistance then
-                        fireAbility()
-                    end
-                end
-            end)
-        end
+parryTab:CreateToggleSwitch("Enable Precision Auto Parry", false, function(val)
+    if val then
+        startAutoParry()
+        lib:Notify("Auto Parry", "Auto Parry Engine Active!", 1.5)
+    else
+        stopAutoParry()
+        lib:Notify("Auto Parry", "Auto Parry Disabled.", 1.5)
     end
 end)
 
-
--- --------------------------------------------------------------------
--- 4. BALL ESP & HIGHLIGHT
--- --------------------------------------------------------------------
-visualTab:CreateCheckbox("Highlight Ball (Green/Red Target)", function(state)
-    Config.BallHighlight = state
-end)
-
-task.spawn(function()
-    while true do
-        task.wait(0.2)
-        if Config.BallHighlight then
-            pcall(function()
-                local ball = getActiveBall()
-                if ball then
-                    local highlight = ball:FindFirstChild("MoonSecBallHighlight")
-                    if not highlight then
-                        highlight = Instance.new("Highlight")
-                        highlight.Name = "MoonSecBallHighlight"
-                        highlight.FillTransparency = 0.3
-                        highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
-                        highlight.Parent = ball
-                    end
-
-                    local targetName = ball:GetAttribute("target")
-                    if targetName == LocalPlayer.Name then
-                        highlight.FillColor = Color3.fromRGB(255, 30, 30) -- Red when targeting player
-                    else
-                        highlight.FillColor = Color3.fromRGB(30, 255, 100) -- Green when targeting someone else
-                    end
-                end
-            end)
-        end
+parryTab:CreateToggleSwitch("Auto Rage / Rapture Ability Parry", false, function(val)
+    UseRage = val
+    if val and not isRunning then
+        startAutoParry()
     end
 end)
 
-print("[Blade Ball MoonSec Suite] Auto Parry Engine Active!")
+local distSlider = parryTab:CreateSlider("Parry Distance Offset", 0, 100, 20, function(val)
+    sliderValue = val
+end)
+
+parryTab:CreateToggleSwitch("Notify When Parried", false, function(val)
+    notifyparried = val
+end)
+
+
+-- --------------------------------------------------------------------
+-- UI TAB 2: SPAM PARRY & KEYBINDS
+-- --------------------------------------------------------------------
+spamTab:CreateKeybind("Spam Parry (Keybind C)", Enum.KeyCode.C, function()
+    triggerParry()
+end)
+
+spamTab:CreateKeybind("+10 Range (Keybind X)", Enum.KeyCode.X, function()
+    if sliderValue < 200 then
+        sliderValue = sliderValue + 10
+        lib:Notify("Range Increased", "New Range: " .. sliderValue, 1)
+    end
+end)
+
+spamTab:CreateKeybind("-10 Range (Keybind Z)", Enum.KeyCode.Z, function()
+    if sliderValue > 0 then
+        sliderValue = sliderValue - 10
+        lib:Notify("Range Decreased", "New Range: " .. sliderValue, 1)
+    end
+end)
+
+spamTab:CreateKeybind("Set Distance to 30 (Keybind V)", Enum.KeyCode.V, function()
+    sliderValue = 30
+    lib:Notify("Range Set", "New Range: 30", 1)
+end)
+
+spamTab:CreateKeybind("Set Distance to 100 (Keybind B)", Enum.KeyCode.B, function()
+    sliderValue = 100
+    lib:Notify("Range Set", "New Range: 100", 1)
+end)
+
+
+-- --------------------------------------------------------------------
+-- UI TAB 3: AUTO CHAT & AUTO GG
+-- --------------------------------------------------------------------
+chatTab:CreateToggleSwitch("Auto GG on Match End", false, function(val)
+    AutoGG = val
+end)
+
+chatTab:CreateToggleSwitch("Auto Chat Response on Accusation", false, function(val)
+    AutoResponse = val
+end)
+
+-- Auto GG Event
+local aliveFolder = Workspace:FindFirstChild("Alive")
+if aliveFolder then
+    aliveFolder.ChildRemoved:Connect(function()
+        if AutoGG and #aliveFolder:GetChildren() <= 1 and not ggdebounce then
+            ggdebounce = true
+            local choice = gameEndResponses[math.random(1, #gameEndResponses)]
+            task.wait(math.random(2, 3.5))
+            pcall(function()
+                ReplicatedStorage.DefaultChatSystemChatEvents.SayMessageRequest:FireServer(choice, "All")
+            end)
+            task.wait(2)
+            ggdebounce = false
+        end
+    end)
+end
+
+-- Auto Response Event
+pcall(function()
+    Players.PlayerChatted:Connect(function(chatType, player, message)
+        if AutoResponse and player ~= LocalPlayer and not responsedebounce then
+            for _, kw in ipairs(keywords) do
+                if string.find(message:lower(), kw) then
+                    responsedebounce = true
+                    local choice = responses[math.random(1, #responses)]
+                    task.wait(math.random(1.5, 3))
+                    pcall(function()
+                        ReplicatedStorage.DefaultChatSystemChatEvents.SayMessageRequest:FireServer(choice, "All")
+                    end)
+                    task.wait(2)
+                    responsedebounce = false
+                    break
+                end
+            end
+        end
+    end)
+end)
+
+print("[Blade Ball Inferno Suite] Loaded Successfully!")
