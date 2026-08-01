@@ -244,7 +244,7 @@ end)
 
 playerTab:CreateSlider("JumpPower (0 - 500)", 0, 500, 50, function(val)
     Config.JumpPower = val
-    if Config.ModifyJump mehn
+    if Config.ModifyJump then
         applyPlayerModifiers(LocalPlayer.Character)
     end
 end)
