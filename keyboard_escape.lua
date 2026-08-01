@@ -1,8 +1,8 @@
 --[[
     Keyboard Escape - Custom Script Suite (keyboard_escape.lua)
     Features: 
-      - Fast Summer Coins Auto Farm (0.1s Teleport & Anti-Death Persistence)
-      - Secret Key Auto Farm (Teleports to Workspace.SpecialKeys items with +2.2 studs Y-offset)
+      - Fast Summer Coins Auto Farm (0.1s Teleport, Anti-Death & Return-To-Start Position)
+      - Secret Key Auto Farm (+2.2 Studs & Return-To-Start Position)
       - Player Tab (WalkSpeed 0-500, JumpPower 0-500)
       - Fly System with FlySpeed Slider (0-300)
     Powered by Custom UI Framework (lib.lua)
@@ -54,6 +54,10 @@ local Config = {
     Flying = false,
     FlySpeed = 50
 }
+
+-- Saved Start Positions for Return-To-Start Logic
+local savedCoinStartCF = nil
+local savedKeyStartCF = nil
 
 -- Fly Physics State
 local flyBV = nil
@@ -172,7 +176,7 @@ LocalPlayer.CharacterAdded:Connect(function(newChar)
 end)
 
 -- --------------------------------------------------------------------
--- 1. FAST SUMMER COINS FARM LOOP (0.1s Interval & Anti-Death Persistence)
+-- 1. FAST SUMMER COINS FARM LOOP (0.1s Teleport & Return-To-Start)
 -- --------------------------------------------------------------------
 task.spawn(function()
     while true do
@@ -185,28 +189,46 @@ task.spawn(function()
                 
                 if not hrp or not humanoid or humanoid.Health <= 0 then return end
 
+                if not savedCoinStartCF then
+                    savedCoinStartCF = hrp.CFrame
+                end
+
                 local coinsFolder = Workspace:FindFirstChild("SummerCoinsLocal")
+                local coinsToCollect = {}
                 if coinsFolder then
                     for _, item in ipairs(coinsFolder:GetChildren()) do
-                        if not Config.SummerCoinsFarm then break end
-                        if humanoid.Health <= 0 then break end
-                        
                         if item.Name == "SummerCoin" then
-                            local targetCF = item:IsA("Model") and item:GetPivot() or (item:IsA("BasePart") and item.CFrame)
-                            if targetCF then
-                                hrp.CFrame = targetCF + Vector3.new(0, 2, 0)
-                                task.wait(0.1)
-                            end
+                            table.insert(coinsToCollect, item)
                         end
                     end
                 end
+
+                if #coinsToCollect > 0 then
+                    for _, item in ipairs(coinsToCollect) do
+                        if not Config.SummerCoinsFarm or humanoid.Health <= 0 then break end
+                        local targetCF = item:IsA("Model") and item:GetPivot() or (item:IsA("BasePart") and item.CFrame)
+                        if targetCF then
+                            hrp.CFrame = targetCF + Vector3.new(0, 2, 0)
+                            task.wait(0.1)
+                        end
+                    end
+                    if savedCoinStartCF and Config.SummerCoinsFarm and humanoid.Health > 0 then
+                        hrp.CFrame = savedCoinStartCF
+                    end
+                else
+                    if savedCoinStartCF and (hrp.CFrame.Position - savedCoinStartCF.Position).Magnitude > 5 then
+                        hrp.CFrame = savedCoinStartCF
+                    end
+                end
             end)
+        else
+            savedCoinStartCF = nil
         end
     end
 end)
 
 -- --------------------------------------------------------------------
--- 2. SECRET KEYS FARM LOOP (Teleports to Workspace.SpecialKeys items with +2.2 studs Y-offset)
+-- 2. SECRET KEYS FARM LOOP (Teleports to Workspace.SpecialKeys & Return-To-Start)
 -- --------------------------------------------------------------------
 task.spawn(function()
     while true do
@@ -219,23 +241,40 @@ task.spawn(function()
 
                 if not hrp or not humanoid or humanoid.Health <= 0 then return end
 
+                if not savedKeyStartCF then
+                    savedKeyStartCF = hrp.CFrame
+                end
+
                 local keysFolder = Workspace:FindFirstChild("SpecialKeys")
+                local keysToCollect = {}
                 if keysFolder then
                     for _, item in ipairs(keysFolder:GetChildren()) do
-                        if not Config.SecretKeyFarm then break end
-                        if humanoid.Health <= 0 then break end
-
                         if string.find(item.Name:lower(), "key") then
-                            local targetCF = item:IsA("Model") and item:GetPivot() or (item:IsA("BasePart") and item.CFrame)
-                            if targetCF then
-                                -- Offset increased by 0.2 studs (from 2.0 to 2.2 studs)
-                                hrp.CFrame = targetCF + Vector3.new(0, 2.2, 0)
-                                task.wait(0.1)
-                            end
+                            table.insert(keysToCollect, item)
                         end
                     end
                 end
+
+                if #keysToCollect > 0 then
+                    for _, item in ipairs(keysToCollect) do
+                        if not Config.SecretKeyFarm or humanoid.Health <= 0 then break end
+                        local targetCF = item:IsA("Model") and item:GetPivot() or (item:IsA("BasePart") and item.CFrame)
+                        if targetCF then
+                            hrp.CFrame = targetCF + Vector3.new(0, 2.2, 0)
+                            task.wait(0.1)
+                        end
+                    end
+                    if savedKeyStartCF and Config.SecretKeyFarm and humanoid.Health > 0 then
+                        hrp.CFrame = savedKeyStartCF
+                    end
+                else
+                    if savedKeyStartCF and (hrp.CFrame.Position - savedKeyStartCF.Position).Magnitude > 5 then
+                        hrp.CFrame = savedKeyStartCF
+                    end
+                end
             end)
+        else
+            savedKeyStartCF = nil
         end
     end
 end)
@@ -247,8 +286,10 @@ end)
 farmTab:CreateToggleSwitch("Summer Coins Farm (0.1s Fast Teleport)", false, function(val)
     Config.SummerCoinsFarm = val
     if val then
-        Library:Notify("Keyboard Escape", "Fast Summer Coins Farm Active (0.1s)!", 1.5)
+        savedCoinStartCF = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") and LocalPlayer.Character.HumanoidRootPart.CFrame
+        Library:Notify("Keyboard Escape", "Summer Coins Farm Active (Auto Return-To-Start)!", 1.5)
     else
+        savedCoinStartCF = nil
         Library:Notify("Keyboard Escape", "Summer Coins Farm Stopped.", 1.5)
     end
 end)
@@ -256,8 +297,10 @@ end)
 farmTab:CreateToggleSwitch("Secret Key Farm (0.1s Fast Teleport)", false, function(val)
     Config.SecretKeyFarm = val
     if val then
-        Library:Notify("Keyboard Escape", "Secret Key Farm Active (+2.2 Studs)!", 1.5)
+        savedKeyStartCF = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") and LocalPlayer.Character.HumanoidRootPart.CFrame
+        Library:Notify("Keyboard Escape", "Secret Key Farm Active (Auto Return-To-Start)!", 1.5)
     else
+        savedKeyStartCF = nil
         Library:Notify("Keyboard Escape", "Secret Key Farm Stopped.", 1.5)
     end
 end)
@@ -321,4 +364,4 @@ settingsTab:CreateSlider("Window Transparency", 0, 90, 25, function(val)
     int:SetTransparency(val / 100)
 end)
 
-print("[Keyboard Escape Suite] Secret Key Farm Offset Updated to +2.2 Studs!")
+print("[Keyboard Escape Suite] Return-To-Start Feature Active!")
