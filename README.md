@@ -4,37 +4,35 @@ A modular, themeable Roblox UI Framework (`lib.lua`), Remote Event Inspector (`r
 
 ## 📁 Repository Structure
 
-* **`lib.lua`** - Reusable Roblox UI Library Framework (supports custom components & themes).
+* **`lib.lua`** - Reusable Roblox UI Library Framework (supports Glassmorphism & custom themes).
 * **`themes.lua`** - Preset UI Color Themes (`royal`, `dark`, `emerald`, `cyber`, `midnight`).
-* **`blade_ball.lua`** - Keyless Blade Ball Suite (Auto Parry, Spam Parry, Auto Ability, Ball Highlight, FPS Booster).
-* **`garden_autofarm.lua`** - 1:1 Deobfuscated MoonSec Garden Suite (Watering, Harvesting, Pet Mutation, Egg ESP, FPS Booster).
+* **`keyboard_escape.lua`** - Keyless Keyboard Escape Suite (Summer Coins Auto Teleport Farm).
+* **`blade_ball.lua`** - Safe Keyless Blade Ball Suite (Humanized Auto Parry & Controls).
 * **`grow_a_garden.lua`** - Official Shop & Purchaser Suite for Roblox Game *"Grow a Garden"*.
 * **`99_nights_admin.lua`** - Official Admin Panel for Roblox Game *"99 Nights in the Forest"*.
 * **`remote_spy.lua`** - Advanced Remote Event Inspector with `[K]` Toggle, Copy Code, and Event Blocking.
 
 ---
 
-## ⚔️ Blade Ball - Quick Execution
+## ⌨️ Keyboard Escape - Quick Execution
 
 Run this 1-line script in your Roblox executor (No Key Required):
 
 ```lua
-loadstring(game:HttpGet("https://raw.githubusercontent.com/kipperadrian3-boop/roblox-ui-library/main/blade_ball.lua"))()
+loadstring(game:HttpGet("https://raw.githubusercontent.com/kipperadrian3-boop/roblox-ui-library/main/keyboard_escape.lua"))()
 ```
 
 ### Features:
-- **Auto Parry (Auto Deflect)**: Auto-parries incoming balls based on distance, velocity, and trajectory.
-- **Spam Parry (Clash Mode)**: Fast auto-parry spam for close-quarters duels.
-- **Auto Ability**: Automatically triggers your character ability (`Q`) when targeted by the ball.
-- **Ball Highlighter**: Visual highlight on the active ball in game.
-- **FPS Booster**: Disables heavy particles and map effects during combat for maximum FPS.
+- **Farm Tab**:
+  - `Summer Coins Farm` (Toggle Switch On/Off)
+  - Durchsucht `Workspace.SummerCoinsLocal` nach allen `SummerCoin` Objekten und teleportiert den Spieler jede 1 Sekunde automatisch dorthin.
 
 ---
 
-## 🌾 Garden Auto-Farm Suite (Keyless)
+## ⚔️ Blade Ball - Quick Execution
 
 ```lua
-loadstring(game:HttpGet("https://raw.githubusercontent.com/kipperadrian3-boop/roblox-ui-library/main/garden_autofarm.lua"))()
+loadstring(game:HttpGet("https://raw.githubusercontent.com/kipperadrian3-boop/roblox-ui-library/main/blade_ball.lua"))()
 ```
 
 ---
