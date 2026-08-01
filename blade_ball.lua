@@ -1,5 +1,5 @@
 --[[
-    Blade Ball - Inferno Precision Auto Parry Engine (blade_ball.lua)
+    Blade Ball - Inferno Precision Auto Parry & Auto Spam Engine (blade_ball.lua)
     Powered by Custom UI Library (lib.lua) with Glassmorphism & Theme Switcher
 ]]
 
@@ -26,7 +26,7 @@ end
 local int = lib:CreateInterface("Blade Ball Suite", "Inferno Auto Parry Engine", "https://discord.gg/ZNTHTWx7KE", "bottom left", "royal", 0.25)
 
 local parryTab = int:CreateTab("Auto Parry", "Physics Impact & Deflect Controls", "item", true)
-local spamTab = int:CreateTab("Spam Parry", "Close Fighting & Keybind Spam", "op")
+local spamTab = int:CreateTab("Spam Parry", "Auto Spam & Close Fighting", "op")
 local chatTab = int:CreateTab("Auto Chat", "Auto GG & Chat Responses", "player")
 local visualTab = int:CreateTab("Visuals", "Future Impact Visualizer", "visuals")
 local settingsTab = int:CreateTab("UI Settings", "Themes, Transparency & Controls", "misc")
@@ -45,6 +45,8 @@ local keywords = {"auto parry", "auto", "cheating", "hacking"}
 local focusedBall = nil
 local distanceVisualizer = nil
 local isRunning = false
+local autoSpamEnabled = false
+local autoSpamDistance = 7 -- Standard 7 Studs distance as requested
 local UseRage = false
 local sliderValue = 20
 local notifyparried = false
@@ -263,6 +265,25 @@ local function stopAutoParry()
     end
 end
 
+-- --------------------------------------------------------------------
+-- AUTO SPAM PARRY LOOP (Fires parry continuously when targeted within range)
+-- --------------------------------------------------------------------
+RunService.RenderStepped:Connect(function()
+    if not autoSpamEnabled then return end
+    pcall(function()
+        if not character or not character:FindFirstChild("HumanoidRootPart") then return end
+        if not checkIfTarget() then return end
+
+        local ball = focusedBall or chooseNewFocusedBall()
+        if ball and ball.Parent then
+            local dist = (ball.Position - character.HumanoidRootPart.Position).Magnitude
+            if dist <= autoSpamDistance then
+                triggerParry()
+            end
+        end
+    end)
+end)
+
 
 -- --------------------------------------------------------------------
 -- UI TAB 1: AUTO PARRY CONTROLS
@@ -294,9 +315,22 @@ end)
 
 
 -- --------------------------------------------------------------------
--- UI TAB 2: SPAM PARRY & KEYBINDS
+-- UI TAB 2: AUTO SPAM PARRY & KEYBINDS
 -- --------------------------------------------------------------------
-spamTab:CreateKeybind("Spam Parry (Keybind C)", Enum.KeyCode.C, function()
+spamTab:CreateToggleSwitch("Enable Auto Spam Parry", false, function(val)
+    autoSpamEnabled = val
+    if val then
+        lib:Notify("Auto Spam", "Auto Spam Active (Target & Distance check)", 1.5)
+    else
+        lib:Notify("Auto Spam", "Auto Spam Disabled", 1.5)
+    end
+end)
+
+spamTab:CreateSlider("Auto Spam Trigger Distance (Studs)", 2, 40, 7, function(val)
+    autoSpamDistance = val
+end)
+
+spamTab:CreateKeybind("Spam Parry Manual (Keybind C)", Enum.KeyCode.C, function()
     triggerParry()
 end)
 
@@ -399,4 +433,4 @@ settingsTab:CreateSlider("Glass Window Transparency", 0, 90, 25, function(val)
     int:SetTransparency(val / 100)
 end)
 
-print("[Blade Ball Suite] Fully powered by Custom Glassmorphic UI Library (lib.lua)!")
+print("[Blade Ball Suite] Auto Spam Engine added successfully!")
