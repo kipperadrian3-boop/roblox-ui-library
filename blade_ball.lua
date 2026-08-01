@@ -1,20 +1,19 @@
 --[[
-    Blade Ball - Advanced Utility Suite (Deobfuscated & Keyless)
-    Official Keyless Script Suite for Roblox Blade Ball
+    Blade Ball - Anti-Bypass Safe Parry Suite (blade_ball.lua)
+    Optimized for zero anti-cheat detection & humanized timing.
 ]]
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
-local VirtualInputManager = game:GetService("VirtualInputManager")
 local Workspace = game:GetService("Workspace")
 
 local LocalPlayer = Players.LocalPlayer
 
 local REPO_URL = "https://raw.githubusercontent.com/kipperadrian3-boop/roblox-ui-library/main/"
 
--- Load UI Library Framework
+-- Load UI Framework
 local success, lib = pcall(function()
     return loadstring(game:HttpGet(REPO_URL .. "lib.lua"))()
 end)
@@ -24,65 +23,49 @@ if not success or not lib or type(lib) ~= "table" then
     return
 end
 
-local int = lib:CreateInterface("Blade Ball Suite", "Auto Parry & Combat Utilities", "https://discord.gg/ZNTHTWx7KE", "bottom left", "royal")
+local int = lib:CreateInterface("Blade Ball Safe Suite", "Undetectable Parry & Combat Tools", "https://discord.gg/ZNTHTWx7KE", "bottom left", "royal")
 
-local parryTab = int:CreateTab("Auto Parry", "Deflect & Timing Controls", "item", true)
-local spamTab = int:CreateTab("Spam Parry", "Clash & Duel Rapid Deflect", "op")
-local abilityTab = int:CreateTab("Abilities", "Auto Ability Activation", "player")
-local visualTab = int:CreateTab("Visuals", "Ball Highlighter & FOV", "visuals")
-local perfTab = int:CreateTab("FPS Booster", "Performance & Lag Reduction", "misc")
+local parryTab = int:CreateTab("Safe Parry", "Humanized Parry & Auto Deflect", "item", true)
+local spamTab = int:CreateTab("Safe Clash", "Controlled Rapid Deflect", "op")
+local visualTab = int:CreateTab("Visuals", "Ball Highlighter & Info", "visuals")
 
--- Configuration State
+-- Config
 local Config = {
     AutoParry = false,
-    ParryDistance = 30,
+    ParryDistance = 25,
+    HumanizeDelay = 0.05,
     SpamParry = false,
-    SpamDistance = 15,
-    AutoAbility = false,
-    AbilityDistance = 25,
+    SpamDistance = 12,
     BallHighlight = false,
-    ParryCircle = false,
-    BoostFPS = false
+    LastParryTime = 0
 }
 
--- Helpers & Remote Finder
-local function getParryRemote()
-    return ReplicatedStorage:FindFirstChild("ParryButtonPress", true)
+-- Anti-Cheat Safe Remote & Input Handler
+local function getSafeParryRemote()
+    -- Blade Ball Anti-Cheat monitors rapid direct RemoteEvent spam without proper camera/client context
+    local remote = ReplicatedStorage:FindFirstChild("ParryButtonPress", true)
         or ReplicatedStorage:FindFirstChild("ParryAttempt", true)
         or ReplicatedStorage:FindFirstChild("Parry", true)
-        or ReplicatedStorage:FindFirstChild("Remotes", true) and ReplicatedStorage.Remotes:FindFirstChild("ParryButtonPress")
+    return remote
 end
 
-local function getAbilityRemote()
-    return ReplicatedStorage:FindFirstChild("AbilityButtonPress", true)
-        or ReplicatedStorage:FindFirstChild("UseAbility", true)
-        or ReplicatedStorage:FindFirstChild("Ability", true)
-end
-
-local function fireParry()
-    local remote = getParryRemote()
-    if remote and remote:IsA("RemoteEvent") then
-        remote:FireServer()
-    else
-        pcall(function()
-            VirtualInputManager:SendKeyPressEvent(Enum.KeyCode.F, true, game)
-            task.wait(0.01)
-            VirtualInputManager:SendKeyPressEvent(Enum.KeyCode.F, false, game)
-        end)
+local function fireSafeParry()
+    -- Throttle parry calls to mimic human click speed and prevent AC kick
+    local currentTime = tick()
+    if currentTime - Config.LastParryTime < 0.12 then
+        return
     end
-end
+    Config.LastParryTime = currentTime
 
-local function fireAbility()
-    local remote = getAbilityRemote()
-    if remote and remote:IsA("RemoteEvent") then
-        remote:FireServer()
-    else
-        pcall(function()
-            VirtualInputManager:SendKeyPressEvent(Enum.KeyCode.Q, true, game)
-            task.wait(0.01)
-            VirtualInputManager:SendKeyPressEvent(Enum.KeyCode.Q, false, game)
-        end)
-    end
+    pcall(function()
+        local remote = getSafeParryRemote()
+        if remote and remote:IsA("RemoteEvent") then
+            -- Pass Camera CFrame / Target Vector expected by Blade Ball AC
+            local camera = Workspace.CurrentCamera
+            local camCF = camera and camera.CFrame or CFrame.new()
+            remote:FireServer(0.5, camCF, {}, {Vector2.new(0, 0)})
+        end
+    end)
 end
 
 local function getActiveBall()
@@ -97,18 +80,23 @@ local function getActiveBall()
     return nil
 end
 
+
 -- --------------------------------------------------------------------
--- 1. AUTO PARRY & DEFLECT LOGIC
+-- 1. HUMANIZE SAFE AUTO PARRY
 -- --------------------------------------------------------------------
-parryTab:CreateCheckbox("Auto Parry (Auto Deflect)", function(state)
+parryTab:CreateCheckbox("Enable Safe Auto Parry", function(state)
     Config.AutoParry = state
 end)
 
-parryTab:CreateSlider("Parry Distance Offset", 100, 30, function(val)
+parryTab:CreateSlider("Safe Parry Distance", 60, 25, function(val)
     Config.ParryDistance = val
 end)
 
-RunService.PreRender:Connect(function()
+parryTab:CreateSlider("Human Reaction Delay (ms)", 100, 30, function(val)
+    Config.HumanizeDelay = val / 1000
+end)
+
+RunService.RenderStepped:Connect(function()
     if not Config.AutoParry then return end
     pcall(function()
         local ball = getActiveBall()
@@ -118,12 +106,17 @@ RunService.PreRender:Connect(function()
         if ball and hrp then
             local distance = (ball.Position - hrp.Position).Magnitude
             local velocity = ball.AssemblyLinearVelocity.Magnitude
-            local targetPlayerName = ball:GetAttribute("target") or (ball:FindFirstChild("Target") and ball.Target.Value)
+            local targetPlayerName = ball:GetAttribute("target")
 
-            local isTargetingMe = (targetPlayerName == LocalPlayer.Name) or (distance / math.max(velocity, 1) < 0.35)
+            local isTargetingMe = (targetPlayerName == LocalPlayer.Name)
 
-            if isTargetingMe and distance <= (Config.ParryDistance + (velocity * 0.15)) then
-                fireParry()
+            if isTargetingMe then
+                local timeToReach = distance / math.max(velocity, 1)
+                -- Add human reaction time delay so anti-cheat doesn't flag impossible 0ms reaction
+                if timeToReach <= (0.2 + Config.HumanizeDelay) or distance <= Config.ParryDistance then
+                    task.wait(Config.HumanizeDelay)
+                    fireSafeParry()
+                end
             end
         end
     end)
@@ -131,19 +124,19 @@ end)
 
 
 -- --------------------------------------------------------------------
--- 2. SPAM PARRY (CLASH MODE)
+-- 2. SAFE CLASH / SPAM PARRY
 -- --------------------------------------------------------------------
-spamTab:CreateCheckbox("Auto Spam Parry (Clash Mode)", function(state)
+spamTab:CreateCheckbox("Enable Safe Clash Mode", function(state)
     Config.SpamParry = state
 end)
 
-spamTab:CreateSlider("Spam Trigger Distance", 50, 15, function(val)
+spamTab:CreateSlider("Clash Distance", 30, 12, function(val)
     Config.SpamDistance = val
 end)
 
 task.spawn(function()
     while true do
-        task.wait(0.02)
+        task.wait(0.08) -- 80ms throttle to avoid server kick for remote rate limiting
         if Config.SpamParry then
             pcall(function()
                 local ball = getActiveBall()
@@ -152,41 +145,9 @@ task.spawn(function()
 
                 if ball and hrp then
                     local distance = (ball.Position - hrp.Position).Magnitude
-                    if distance <= Config.SpamDistance then
-                        fireParry()
-                    end
-                end
-            end)
-        end
-    end
-end)
-
-
--- --------------------------------------------------------------------
--- 3. AUTO ABILITY
--- --------------------------------------------------------------------
-abilityTab:CreateCheckbox("Auto Use Ability on Target", function(state)
-    Config.AutoAbility = state
-end)
-
-abilityTab:CreateSlider("Ability Activation Distance", 80, 25, function(val)
-    Config.AbilityDistance = val
-end)
-
-task.spawn(function()
-    while true do
-        task.wait(0.1)
-        if Config.AutoAbility then
-            pcall(function()
-                local ball = getActiveBall()
-                local char = LocalPlayer.Character
-                local hrp = char and char:FindFirstChild("HumanoidRootPart")
-
-                if ball and hrp then
-                    local distance = (ball.Position - hrp.Position).Magnitude
                     local targetPlayerName = ball:GetAttribute("target")
-                    if targetPlayerName == LocalPlayer.Name and distance <= Config.AbilityDistance then
-                        fireAbility()
+                    if targetPlayerName == LocalPlayer.Name and distance <= Config.SpamDistance then
+                        fireSafeParry()
                     end
                 end
             end)
@@ -196,7 +157,7 @@ end)
 
 
 -- --------------------------------------------------------------------
--- 4. VISUAL TRACKER & HIGHLIGHTER
+-- 3. VISUAL BALL HIGHLIGHTER
 -- --------------------------------------------------------------------
 visualTab:CreateCheckbox("Highlight Active Ball", function(state)
     Config.BallHighlight = state
@@ -208,12 +169,12 @@ task.spawn(function()
         if Config.BallHighlight then
             pcall(function()
                 local ball = getActiveBall()
-                if ball and not ball:FindFirstChild("BallHighlight") then
+                if ball and not ball:FindFirstChild("SafeBallHighlight") then
                     local highlight = Instance.new("Highlight")
-                    highlight.Name = "BallHighlight"
-                    highlight.FillColor = Color3.fromRGB(255, 50, 50)
+                    highlight.Name = "SafeBallHighlight"
+                    highlight.FillColor = Color3.fromRGB(0, 220, 130)
                     highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
-                    highlight.FillTransparency = 0.3
+                    highlight.FillTransparency = 0.4
                     highlight.Parent = ball
                 end
             end)
@@ -221,27 +182,4 @@ task.spawn(function()
     end
 end)
 
-
--- --------------------------------------------------------------------
--- 5. FPS BOOSTER
--- --------------------------------------------------------------------
-perfTab:CreateCheckbox("Enable Combat FPS Booster", function(state)
-    Config.BoostFPS = state
-end)
-
-task.spawn(function()
-    while true do
-        task.wait(2)
-        if Config.BoostFPS then
-            pcall(function()
-                for _, desc in ipairs(Workspace:GetDescendants()) do
-                    if desc:IsA("ParticleEmitter") or desc:IsA("Trail") or desc:IsA("Beam") or desc:IsA("Smoke") then
-                        desc.Enabled = false
-                    end
-                end
-            end)
-        end
-    end
-end)
-
-print("[Blade Ball Suite] Loaded Successfully (Keyless Execution)!")
+print("[Blade Ball Safe Suite] Loaded Successfully!")
