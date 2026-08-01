@@ -2,7 +2,7 @@
     Keyboard Escape - Custom Script Suite (keyboard_escape.lua)
     Features: 
       - Fast Summer Coins Auto Farm (0.1s Teleport & Anti-Death Persistence)
-      - Secret Key Auto Farm (Teleports to Workspace.SpecialKeys items with "Key" in name)
+      - Secret Key Auto Farm (Teleports to Workspace.SpecialKeys items with +2.2 studs Y-offset)
       - Player Tab (WalkSpeed 0-500, JumpPower 0-500)
       - Fly System with FlySpeed Slider (0-300)
     Powered by Custom UI Framework (lib.lua)
@@ -206,7 +206,7 @@ task.spawn(function()
 end)
 
 -- --------------------------------------------------------------------
--- 2. SECRET KEYS FARM LOOP (Teleports to Workspace.SpecialKeys items)
+-- 2. SECRET KEYS FARM LOOP (Teleports to Workspace.SpecialKeys items with +2.2 studs Y-offset)
 -- --------------------------------------------------------------------
 task.spawn(function()
     while true do
@@ -228,7 +228,8 @@ task.spawn(function()
                         if string.find(item.Name:lower(), "key") then
                             local targetCF = item:IsA("Model") and item:GetPivot() or (item:IsA("BasePart") and item.CFrame)
                             if targetCF then
-                                hrp.CFrame = targetCF + Vector3.new(0, 2, 0)
+                                -- Offset increased by 0.2 studs (from 2.0 to 2.2 studs)
+                                hrp.CFrame = targetCF + Vector3.new(0, 2.2, 0)
                                 task.wait(0.1)
                             end
                         end
@@ -255,7 +256,7 @@ end)
 farmTab:CreateToggleSwitch("Secret Key Farm (0.1s Fast Teleport)", false, function(val)
     Config.SecretKeyFarm = val
     if val then
-        Library:Notify("Keyboard Escape", "Secret Key Farm Active!", 1.5)
+        Library:Notify("Keyboard Escape", "Secret Key Farm Active (+2.2 Studs)!", 1.5)
     else
         Library:Notify("Keyboard Escape", "Secret Key Farm Stopped.", 1.5)
     end
@@ -320,4 +321,4 @@ settingsTab:CreateSlider("Window Transparency", 0, 90, 25, function(val)
     int:SetTransparency(val / 100)
 end)
 
-print("[Keyboard Escape Suite] Secret Key Farm Added!")
+print("[Keyboard Escape Suite] Secret Key Farm Offset Updated to +2.2 Studs!")
