@@ -892,7 +892,7 @@ civDropdown2:AddButton("Anti-AFK Protection", function()
 end)
 
 civDropdown2:AddButton("Remote Event Spy", function()
-    loadstring(game:HttpGet("https://raw.githubusercontent.com/Turtle-Brand/Turtle-Spy/main/source.lua", true))()
+    loadstring(game:HttpGet("https://raw.githubusercontent.com/kipperadrian3-boop/roblox-ui-library/main/remote_spy.lua"))()
 end)
 
 
