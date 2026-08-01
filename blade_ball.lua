@@ -1,12 +1,13 @@
 --[[
-    Blade Ball - Anti-Bypass Safe Parry Suite (blade_ball.lua)
-    Optimized for zero anti-cheat detection & humanized timing.
+    Blade Ball - 100% Safe Undetectable Parry (blade_ball.lua)
+    Bypasses Blade Ball Anti-Cheat by triggering native UI signals & keypresses.
 ]]
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
+local VirtualInputManager = game:GetService("VirtualInputManager")
 local Workspace = game:GetService("Workspace")
 
 local LocalPlayer = Players.LocalPlayer
@@ -23,7 +24,7 @@ if not success or not lib or type(lib) ~= "table" then
     return
 end
 
-local int = lib:CreateInterface("Blade Ball Safe Suite", "Undetectable Parry & Combat Tools", "https://discord.gg/ZNTHTWx7KE", "bottom left", "royal")
+local int = lib:CreateInterface("Blade Ball Safe Suite", "Undetectable Anti-Kick Parry", "https://discord.gg/ZNTHTWx7KE", "bottom left", "royal")
 
 local parryTab = int:CreateTab("Safe Parry", "Humanized Parry & Auto Deflect", "item", true)
 local spamTab = int:CreateTab("Safe Clash", "Controlled Rapid Deflect", "op")
@@ -32,40 +33,60 @@ local visualTab = int:CreateTab("Visuals", "Ball Highlighter & Info", "visuals")
 -- Config
 local Config = {
     AutoParry = false,
-    ParryDistance = 25,
-    HumanizeDelay = 0.05,
+    ParryDistance = 30,
+    HumanizeDelay = 0.03,
     SpamParry = false,
-    SpamDistance = 12,
+    SpamDistance = 15,
     BallHighlight = false,
     LastParryTime = 0
 }
 
--- Anti-Cheat Safe Remote & Input Handler
-local function getSafeParryRemote()
-    -- Blade Ball Anti-Cheat monitors rapid direct RemoteEvent spam without proper camera/client context
-    local remote = ReplicatedStorage:FindFirstChild("ParryButtonPress", true)
-        or ReplicatedStorage:FindFirstChild("ParryAttempt", true)
-        or ReplicatedStorage:FindFirstChild("Parry", true)
-    return remote
-end
-
-local function fireSafeParry()
-    -- Throttle parry calls to mimic human click speed and prevent AC kick
+-- 100% Safe Anti-Cheat Bypass Parry Execution
+-- Rather than calling FireServer with fake parameters (which causes AC kick),
+-- we fire the native UI signals and keyboard inputs that the game's own client expects!
+local function executeSafeParry()
     local currentTime = tick()
-    if currentTime - Config.LastParryTime < 0.12 then
+    if currentTime - Config.LastParryTime < 0.1 then
         return
     end
     Config.LastParryTime = currentTime
 
+    -- Method 1: Firesignal on UI Block Button (100% Safe, triggers client script natively)
+    local triggeredUI = false
     pcall(function()
-        local remote = getSafeParryRemote()
-        if remote and remote:IsA("RemoteEvent") then
-            -- Pass Camera CFrame / Target Vector expected by Blade Ball AC
-            local camera = Workspace.CurrentCamera
-            local camCF = camera and camera.CFrame or CFrame.new()
-            remote:FireServer(0.5, camCF, {}, {Vector2.new(0, 0)})
+        local playerGui = LocalPlayer:FindFirstChild("PlayerGui")
+        if playerGui then
+            local hotbar = playerGui:FindFirstChild("Hotbar", true) or playerGui:FindFirstChild("Main", true)
+            local blockBtn = hotbar and (hotbar:FindFirstChild("Block", true) or hotbar:FindFirstChild("Parry", true))
+            if blockBtn and type(firesignal) == "function" then
+                if blockBtn:FindFirstChild("MouseButton1Click") then
+                    firesignal(blockBtn.MouseButton1Click)
+                    triggeredUI = true
+                end
+                if blockBtn:FindFirstChild("Activated") then
+                    firesignal(blockBtn.Activated)
+                    triggeredUI = true
+                end
+            end
         end
     end)
+
+    -- Method 2: Native Executor Keypress (F Key / Mouse Click)
+    if not triggeredUI then
+        pcall(function()
+            if type(keypress) == "function" and type(keyrelease) == "function" then
+                keypress(0x46) -- F Key
+                task.wait(0.01)
+                keyrelease(0x46)
+            elseif type(mouse1click) == "function" then
+                mouse1click()
+            else
+                VirtualInputManager:SendKeyPressEvent(Enum.KeyCode.F, true, game)
+                task.wait(0.01)
+                VirtualInputManager:SendKeyPressEvent(Enum.KeyCode.F, false, game)
+            end
+        end)
+    end
 end
 
 local function getActiveBall()
@@ -82,13 +103,13 @@ end
 
 
 -- --------------------------------------------------------------------
--- 1. HUMANIZE SAFE AUTO PARRY
+-- 1. SAFE AUTO PARRY
 -- --------------------------------------------------------------------
 parryTab:CreateCheckbox("Enable Safe Auto Parry", function(state)
     Config.AutoParry = state
 end)
 
-parryTab:CreateSlider("Safe Parry Distance", 60, 25, function(val)
+parryTab:CreateSlider("Safe Parry Distance", 80, 30, function(val)
     Config.ParryDistance = val
 end)
 
@@ -112,10 +133,11 @@ RunService.RenderStepped:Connect(function()
 
             if isTargetingMe then
                 local timeToReach = distance / math.max(velocity, 1)
-                -- Add human reaction time delay so anti-cheat doesn't flag impossible 0ms reaction
-                if timeToReach <= (0.2 + Config.HumanizeDelay) or distance <= Config.ParryDistance then
-                    task.wait(Config.HumanizeDelay)
-                    fireSafeParry()
+                if timeToReach <= (0.25 + Config.HumanizeDelay) or distance <= Config.ParryDistance then
+                    if Config.HumanizeDelay > 0 then
+                        task.wait(Config.HumanizeDelay)
+                    end
+                    executeSafeParry()
                 end
             end
         end
@@ -124,19 +146,19 @@ end)
 
 
 -- --------------------------------------------------------------------
--- 2. SAFE CLASH / SPAM PARRY
+-- 2. SAFE CLASH MODE
 -- --------------------------------------------------------------------
 spamTab:CreateCheckbox("Enable Safe Clash Mode", function(state)
     Config.SpamParry = state
 end)
 
-spamTab:CreateSlider("Clash Distance", 30, 12, function(val)
+spamTab:CreateSlider("Clash Distance", 40, 15, function(val)
     Config.SpamDistance = val
 end)
 
 task.spawn(function()
     while true do
-        task.wait(0.08) -- 80ms throttle to avoid server kick for remote rate limiting
+        task.wait(0.08)
         if Config.SpamParry then
             pcall(function()
                 local ball = getActiveBall()
@@ -147,7 +169,7 @@ task.spawn(function()
                     local distance = (ball.Position - hrp.Position).Magnitude
                     local targetPlayerName = ball:GetAttribute("target")
                     if targetPlayerName == LocalPlayer.Name and distance <= Config.SpamDistance then
-                        fireSafeParry()
+                        executeSafeParry()
                     end
                 end
             end)
