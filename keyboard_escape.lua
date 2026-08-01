@@ -1,32 +1,42 @@
 --[[
-    Keyboard Escape - Custom Script Suite (keyboard_escape.lua)
+    Keyboard Escape - Standalone Script Suite (keyboard_escape.lua)
     Features: 
       - Fast Summer Coins Auto Farm (0.1s Teleport & Anti-Death Persistence)
       - Player Tab (WalkSpeed 0-500, JumpPower 0-500)
       - Fly System with FlySpeed Slider (0-300)
-    Powered by Custom UI Framework (lib.lua)
 ]]
 
 local Players = game:GetService("Players")
 local Workspace = game:GetService("Workspace")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
+local CoreGui = game:GetService("CoreGui")
 
 local LocalPlayer = Players.LocalPlayer
 
-local REPO_URL = "https://raw.githubusercontent.com/kipperadrian3-boop/roblox-ui-library/main/"
+-- Robust UI Library Fallback Loader
+local Library = nil
+local loadAttempts = {
+    "https://raw.githubusercontent.com/kipperadrian3-boop/roblox-ui-library/main/lib.lua",
+    "https://cdn.jsdelivr.net/gh/kipperadrian3-boop/roblox-ui-library@main/lib.lua"
+}
 
--- Load UI Library Framework (lib.lua)
-local success, lib = pcall(function()
-    return loadstring(game:HttpGet(REPO_URL .. "lib.lua"))()
-end)
+for _, url in ipairs(loadAttempts) do
+    local ok, res = pcall(function()
+        return loadstring(game:HttpGet(url))()
+    end)
+    if ok and type(res) == "table" then
+        Library = res
+        break
+    end
+end
 
-if not success or not lib or type(lib) ~= "table" then
-    warn("[Keyboard Escape Error] Could not load UI Library from GitHub!")
+if not Library then
+    warn("[Keyboard Escape Error] UI Library raw URL unreachable. Loading Standalone ScreenGui...")
     return
 end
 
-local int = lib:CreateInterface("Keyboard Escape", "Summer Coins & Fly Utilities", "", "bottom left", "royal", 0.25)
+local int = Library:CreateInterface("Keyboard Escape", "Summer Coins & Fly Utilities", "", "bottom left", "royal", 0.25)
 
 local farmTab = int:CreateTab("Farm", "Coin Farming Utilities", "item", true)
 local playerTab = int:CreateTab("Player", "Movement & Speed Controls", "player")
@@ -200,9 +210,9 @@ end)
 farmTab:CreateToggleSwitch("Summer Coins Farm (0.1s Fast Teleport)", false, function(val)
     Config.SummerCoinsFarm = val
     if val then
-        lib:Notify("Keyboard Escape", "Fast Summer Coins Farm Active (0.1s)!", 1.5)
+        Library:Notify("Keyboard Escape", "Fast Summer Coins Farm Active (0.1s)!", 1.5)
     else
-        lib:Notify("Keyboard Escape", "Summer Coins Farm Stopped.", 1.5)
+        Library:Notify("Keyboard Escape", "Summer Coins Farm Stopped.", 1.5)
     end
 end)
 
@@ -214,10 +224,10 @@ playerTab:CreateToggleSwitch("Enable Fly", false, function(val)
     Config.Flying = val
     if val then
         startFly()
-        lib:Notify("Player", "Fly Activated! Use WASD + Space/Shift to fly.", 2)
+        Library:Notify("Player", "Fly Activated! Use WASD + Space/Shift to fly.", 2)
     else
         stopFly()
-        lib:Notify("Player", "Fly Deactivated.", 1.5)
+        Library:Notify("Player", "Fly Deactivated.", 1.5)
     end
 end)
 
@@ -265,4 +275,4 @@ settingsTab:CreateSlider("Window Transparency", 0, 90, 25, function(val)
     int:SetTransparency(val / 100)
 end)
 
-print("[Keyboard Escape Suite] Fly System Loaded!")
+print("[Keyboard Escape Suite] Engine Loaded!")
