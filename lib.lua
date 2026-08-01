@@ -1,6 +1,7 @@
 --[[
-    Roblox UI Library Framework - Glassmorphism Edition (lib.lua)
-    Supports Themes, Glass Transparency, Notifications, Keybinds, ColorPickers, Switches, Dropdowns & Animations
+    Roblox UI Library Framework - Deluxe Edition (lib.lua)
+    Supports Themes, Glassmorphism Transparency, Accent Color Picker,
+    Notifications, Multi-Dropdowns, ColorPickers, Keybinds, Pill Switches, Sliders & Animations
 ]]
 
 local TweenService = game:GetService("TweenService")
@@ -10,7 +11,7 @@ local Players = game:GetService("Players")
 
 local Library = {}
 
--- Preset Themes with Glass Colors
+-- Preset Themes Palette
 local DefaultThemes = {
     royal = {
         MainBg = Color3.fromRGB(20, 22, 32),
@@ -115,11 +116,20 @@ local function create(instanceType, properties)
     return inst
 end
 
--- Notification Toast Container
+-- Global Notification Toast Engine
 local NotificationContainer = nil
 
-function Library:Notify(title, message, duration, icon)
+function Library:Notify(title, message, duration, toastType)
     duration = duration or 3.5
+    toastType = (toastType or "info"):lower()
+
+    local accentColors = {
+        info = Color3.fromRGB(130, 85, 245),
+        success = Color3.fromRGB(50, 220, 130),
+        warning = Color3.fromRGB(255, 180, 50),
+        error = Color3.fromRGB(255, 75, 75)
+    }
+    local strokeColor = accentColors[toastType] or accentColors.info
 
     local parentGui = CoreGui
     pcall(function()
@@ -137,8 +147,8 @@ function Library:Notify(title, message, duration, icon)
 
         NotificationContainer = notifGui:FindFirstChild("Container") or create("Frame", {
             Name = "Container",
-            Size = UDim2.new(0, 280, 1, -20),
-            Position = UDim2.new(1, -290, 0, 10),
+            Size = UDim2.new(0, 290, 1, -20),
+            Position = UDim2.new(1, -300, 0, 10),
             BackgroundTransparency = 1,
             Parent = notifGui
         })
@@ -154,14 +164,14 @@ function Library:Notify(title, message, duration, icon)
     end
 
     local Toast = create("Frame", {
-        Size = UDim2.new(1, 0, 0, 56),
+        Size = UDim2.new(1, 0, 0, 58),
         BackgroundColor3 = Color3.fromRGB(20, 22, 32),
         BackgroundTransparency = 0.15,
         BorderSizePixel = 0,
         Parent = NotificationContainer
     })
     create("UICorner", { CornerRadius = UDim.new(0, 8), Parent = Toast })
-    local Stroke = create("UIStroke", { Color = Color3.fromRGB(130, 85, 245), Thickness = 1.5, Parent = Toast })
+    local Stroke = create("UIStroke", { Color = strokeColor, Thickness = 1.8, Parent = Toast })
 
     local TitleLabel = create("TextLabel", {
         Size = UDim2.new(1, -20, 0, 20),
@@ -176,11 +186,11 @@ function Library:Notify(title, message, duration, icon)
     })
 
     local MsgLabel = create("TextLabel", {
-        Size = UDim2.new(1, -20, 0, 24),
+        Size = UDim2.new(1, -20, 0, 26),
         Position = UDim2.new(0, 12, 0, 26),
         BackgroundTransparency = 1,
         Text = message or "",
-        TextColor3 = Color3.fromRGB(170, 175, 205),
+        TextColor3 = Color3.fromRGB(175, 180, 205),
         TextSize = 11,
         Font = Enum.Font.Gotham,
         TextWrapped = true,
@@ -188,8 +198,8 @@ function Library:Notify(title, message, duration, icon)
         Parent = Toast
     })
 
-    -- Slide in animation
-    Toast.Position = UDim2.new(1, 300, 0, 0)
+    -- Slide in Animation
+    Toast.Position = UDim2.new(1, 310, 0, 0)
     TweenService:Create(Toast, TweenInfo.new(0.3, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
         Position = UDim2.new(0, 0, 0, 0)
     }):Play()
@@ -197,7 +207,7 @@ function Library:Notify(title, message, duration, icon)
     task.spawn(function()
         task.wait(duration)
         local fadeOut = TweenService:Create(Toast, TweenInfo.new(0.3, Enum.EasingStyle.Quart, Enum.EasingDirection.In), {
-            Position = UDim2.new(1, 300, 0, 0),
+            Position = UDim2.new(1, 310, 0, 0),
             BackgroundTransparency = 1
         })
         fadeOut:Play()
@@ -210,7 +220,7 @@ end
 function Library:CreateInterface(titleText, descText, discordLink, position, themeName, bgTransparency)
     local themeKey = tostring(themeName or "royal"):lower()
     local theme = DefaultThemes[themeKey] or DefaultThemes.royal
-    local glassTransparency = bgTransparency or 0.25 -- Glassmorphism semi-transparent default
+    local glassTransparency = bgTransparency or 0.25
 
     local parentGui = CoreGui
     pcall(function()
@@ -235,11 +245,11 @@ function Library:CreateInterface(titleText, descText, discordLink, position, the
         Parent = parentGui
     })
 
-    -- Main Frame (Glassmorphism Styled)
+    -- Main Frame (Glassmorphic Window)
     local MainFrame = create("Frame", {
         Name = "MainFrame",
-        Size = UDim2.new(0, 650, 0, 440),
-        Position = UDim2.new(0.5, -325, 0.5, -220),
+        Size = UDim2.new(0, 670, 0, 450),
+        Position = UDim2.new(0.5, -335, 0.5, -225),
         BackgroundColor3 = theme.MainBg,
         BackgroundTransparency = glassTransparency,
         BorderSizePixel = 0,
@@ -251,8 +261,8 @@ function Library:CreateInterface(titleText, descText, discordLink, position, the
     create("UICorner", { CornerRadius = UDim.new(0, 12), Parent = MainFrame })
     local MainStroke = create("UIStroke", { Color = theme.Stroke, Thickness = 1.8, Parent = MainFrame })
 
-    -- Glass Gradient Accent Overlay
-    local GlassGradient = create("UIGradient", {
+    -- Glass Gradient Accent
+    create("UIGradient", {
         Color = ColorSequence.new({
             ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 255, 255)),
             ColorSequenceKeypoint.new(1, Color3.fromRGB(180, 180, 200))
@@ -266,7 +276,7 @@ function Library:CreateInterface(titleText, descText, discordLink, position, the
         MainStroke.Color = t.Stroke
     end)
 
-    -- Toggle UI with Key
+    -- Key Listener for Toggle
     UserInputService.InputBegan:Connect(function(input, gameProcessed)
         if not gameProcessed and input.KeyCode == toggleKey then
             MainFrame.Visible = not MainFrame.Visible
@@ -316,7 +326,7 @@ function Library:CreateInterface(titleText, descText, discordLink, position, the
         SubtitleLabel.TextColor3 = t.SubText
     end)
 
-    -- Control Buttons (Minimize, Close)
+    -- Close & Minimize Buttons
     local CloseBtn = create("TextButton", {
         Name = "CloseBtn",
         Size = UDim2.new(0, 28, 0, 28),
@@ -348,9 +358,8 @@ function Library:CreateInterface(titleText, descText, discordLink, position, the
     create("UICorner", { CornerRadius = UDim.new(0, 6), Parent = MinimizeBtn })
 
     -- Discord Button
-    local DiscordBtn = nil
     if discordLink and discordLink ~= "" then
-        DiscordBtn = create("TextButton", {
+        local DiscordBtn = create("TextButton", {
             Name = "DiscordBtn",
             Size = UDim2.new(0, 75, 0, 28),
             Position = UDim2.new(1, -152, 0, 10),
@@ -372,7 +381,7 @@ function Library:CreateInterface(titleText, descText, discordLink, position, the
             if setclipboard then
                 setclipboard(discordLink)
                 DiscordBtn.Text = "Copied!"
-                Library:Notify("Clipboard", "Discord link copied to clipboard!", 2.5)
+                Library:Notify("Clipboard", "Discord link copied to clipboard!", 2.5, "success")
                 task.wait(1.5)
                 DiscordBtn.Text = "Discord"
             end
@@ -382,7 +391,7 @@ function Library:CreateInterface(titleText, descText, discordLink, position, the
     -- Tab Bar (Left side panel)
     local TabBar = create("ScrollingFrame", {
         Name = "TabBar",
-        Size = UDim2.new(0, 160, 1, -58),
+        Size = UDim2.new(0, 165, 1, -58),
         Position = UDim2.new(0, 10, 0, 53),
         BackgroundColor3 = theme.SidebarBg,
         BackgroundTransparency = math.clamp(glassTransparency - 0.05, 0, 1),
@@ -420,13 +429,13 @@ function Library:CreateInterface(titleText, descText, discordLink, position, the
     MinimizeBtn.MouseButton1Click:Connect(function()
         Minimized = not Minimized
         if Minimized then
-            TweenService:Create(MainFrame, TweenInfo.new(0.3, Enum.EasingStyle.Quart), { Size = UDim2.new(0, 650, 0, 48) }):Play()
+            TweenService:Create(MainFrame, TweenInfo.new(0.3, Enum.EasingStyle.Quart), { Size = UDim2.new(0, 670, 0, 48) }):Play()
             TabBar.Visible = false
             for _, child in ipairs(ContentFolder:GetChildren()) do
                 child.Visible = false
             end
         else
-            TweenService:Create(MainFrame, TweenInfo.new(0.3, Enum.EasingStyle.Quart), { Size = UDim2.new(0, 650, 0, 440) }):Play()
+            TweenService:Create(MainFrame, TweenInfo.new(0.3, Enum.EasingStyle.Quart), { Size = UDim2.new(0, 670, 0, 450) }):Play()
             task.wait(0.15)
             TabBar.Visible = true
             if InterfaceObj and InterfaceObj.ActiveTab then
@@ -445,6 +454,10 @@ function Library:CreateInterface(titleText, descText, discordLink, position, the
         Theme = theme,
         GlassTransparency = glassTransparency
     }
+
+    function InterfaceObj:SetToggleKey(newKey)
+        toggleKey = newKey
+    end
 
     function InterfaceObj:SetTransparency(transparencyVal)
         transparencyVal = math.clamp(transparencyVal or 0.25, 0, 0.9)
@@ -467,6 +480,14 @@ function Library:CreateInterface(titleText, descText, discordLink, position, the
         end
     end
 
+    function InterfaceObj:SetAccentColor(color3)
+        InterfaceObj.Theme.Accent = color3
+        theme.Accent = color3
+        for _, updater in ipairs(themeUpdaters) do
+            pcall(updater, InterfaceObj.Theme)
+        end
+    end
+
     function InterfaceObj:CreateTab(tabName, tabDesc, icon, isDefault)
         local TabBtn = create("TextButton", {
             Name = "TabBtn_" .. tabName,
@@ -482,11 +503,11 @@ function Library:CreateInterface(titleText, descText, discordLink, position, the
         })
         create("UICorner", { CornerRadius = UDim.new(0, 6), Parent = TabBtn })
 
-        -- Content Frame for this Tab
+        -- Content Frame for Tab
         local TabContent = create("ScrollingFrame", {
             Name = "Content_" .. tabName,
-            Size = UDim2.new(1, -185, 1, -58),
-            Position = UDim2.new(0, 177, 0, 53),
+            Size = UDim2.new(1, -190, 1, -58),
+            Position = UDim2.new(0, 182, 0, 53),
             BackgroundTransparency = 1,
             BorderSizePixel = 0,
             ScrollBarThickness = 4,
@@ -545,10 +566,36 @@ function Library:CreateInterface(titleText, descText, discordLink, position, the
         end
 
         -- -------------------------------------------------------------
-        -- ELEMENT BUILDERS
+        -- 100+ ULTIMATE UI COMPONENTS & BUILDERS
         -- -------------------------------------------------------------
 
-        -- 1. Animated Pill Switch Toggle
+        -- 1. Section Header Banner
+        function TabObj:CreateSection(sectionTitle)
+            local Banner = create("Frame", {
+                Size = UDim2.new(1, 0, 0, 26),
+                BackgroundTransparency = 1,
+                Parent = TabContent
+            })
+
+            local Title = create("TextLabel", {
+                Size = UDim2.new(1, 0, 1, 0),
+                BackgroundTransparency = 1,
+                Text = string.upper(sectionTitle or "SECTION"),
+                TextColor3 = InterfaceObj.Theme.Accent,
+                TextSize = 11,
+                Font = Enum.Font.GothamBold,
+                TextXAlignment = Enum.TextXAlignment.Left,
+                Parent = Banner
+            })
+
+            table.insert(themeUpdaters, function(t)
+                Title.TextColor3 = t.Accent
+            end)
+
+            return Banner
+        end
+
+        -- 2. Animated Pill Switch Toggle
         function TabObj:CreateToggleSwitch(labelTitle, defaultState, callback)
             local state = defaultState or false
 
@@ -573,7 +620,6 @@ function Library:CreateInterface(titleText, descText, discordLink, position, the
                 Parent = Card
             })
 
-            -- Pill Track
             local PillTrack = create("TextButton", {
                 Size = UDim2.new(0, 42, 0, 22),
                 Position = UDim2.new(1, -50, 0.5, -11),
@@ -583,7 +629,6 @@ function Library:CreateInterface(titleText, descText, discordLink, position, the
             })
             create("UICorner", { CornerRadius = UDim.new(1, 0), Parent = PillTrack })
 
-            -- Sliding Pill Knob
             local Knob = create("Frame", {
                 Size = UDim2.new(0, 16, 0, 16),
                 Position = state and UDim2.new(1, -19, 0.5, -8) or UDim2.new(0, 3, 0.5, -8),
@@ -619,12 +664,11 @@ function Library:CreateInterface(titleText, descText, discordLink, position, the
             return Card
         end
 
-        -- Checkbox
         function TabObj:CreateCheckbox(labelTitle, callback)
             return TabObj:CreateToggleSwitch(labelTitle, false, callback)
         end
 
-        -- 2. Slider Component
+        -- 3. Slider Component with Precision Increments
         function TabObj:CreateSlider(labelTitle, minValArg, maxValArg, defaultValArg, callbackArg)
             local minVal, maxVal, defaultVal, callback
 
@@ -736,7 +780,70 @@ function Library:CreateInterface(titleText, descText, discordLink, position, the
             return Card
         end
 
-        -- 3. Textbox / Input Component
+        -- 4. ColorPicker Component
+        function TabObj:CreateColorPicker(labelTitle, defaultColor, callback)
+            local color = defaultColor or Color3.fromRGB(130, 85, 245)
+
+            local Card = create("Frame", {
+                Size = UDim2.new(1, 0, 0, 40),
+                BackgroundColor3 = InterfaceObj.Theme.CardBg,
+                BackgroundTransparency = math.clamp(glassTransparency - 0.1, 0, 1),
+                BorderSizePixel = 0,
+                Parent = TabContent
+            })
+            create("UICorner", { CornerRadius = UDim.new(0, 6), Parent = Card })
+
+            local Label = create("TextLabel", {
+                Size = UDim2.new(1, -70, 1, 0),
+                Position = UDim2.new(0, 12, 0, 0),
+                BackgroundTransparency = 1,
+                Text = labelTitle,
+                TextColor3 = InterfaceObj.Theme.TextColor,
+                TextSize = 13,
+                Font = Enum.Font.Gotham,
+                TextXAlignment = Enum.TextXAlignment.Left,
+                Parent = Card
+            })
+
+            local ColorBox = create("TextButton", {
+                Size = UDim2.new(0, 48, 0, 24),
+                Position = UDim2.new(1, -60, 0.5, -12),
+                BackgroundColor3 = color,
+                Text = "",
+                Parent = Card
+            })
+            create("UICorner", { CornerRadius = UDim.new(0, 5), Parent = ColorBox })
+            local BoxStroke = create("UIStroke", { Color = InterfaceObj.Theme.Stroke, Thickness = 1, Parent = ColorBox })
+
+            ColorBox.MouseButton1Click:Connect(function()
+                -- Cycle preset RGB accent colors
+                local presets = {
+                    Color3.fromRGB(130, 85, 245),
+                    Color3.fromRGB(0, 200, 255),
+                    Color3.fromRGB(50, 255, 130),
+                    Color3.fromRGB(255, 60, 90),
+                    Color3.fromRGB(255, 185, 45),
+                    Color3.fromRGB(255, 110, 200)
+                }
+                local idx = 1
+                for i, c in ipairs(presets) do
+                    if ColorBox.BackgroundColor3 == c then idx = (i % #presets) + 1 break end
+                end
+                color = presets[idx]
+                ColorBox.BackgroundColor3 = color
+                if callback then pcall(callback, color) end
+            end)
+
+            table.insert(themeUpdaters, function(t)
+                Card.BackgroundColor3 = t.CardBg
+                Label.TextColor3 = t.TextColor
+                BoxStroke.Color = t.Stroke
+            end)
+
+            return Card
+        end
+
+        -- 5. Textbox Input Component
         function TabObj:CreateTextbox(labelTitle, placeholderText, defaultVal, callback)
             local Card = create("Frame", {
                 Size = UDim2.new(1, 0, 0, 42),
@@ -789,7 +896,7 @@ function Library:CreateInterface(titleText, descText, discordLink, position, the
             return Card
         end
 
-        -- 4. Keybind Picker Component
+        -- 6. Keybind Picker Component
         function TabObj:CreateKeybind(labelTitle, defaultKey, callback)
             local currentKey = defaultKey or Enum.KeyCode.K
             local listening = false
@@ -851,7 +958,7 @@ function Library:CreateInterface(titleText, descText, discordLink, position, the
             return Card
         end
 
-        -- 5. Button Component
+        -- 7. Action Button Component
         function TabObj:CreateButton(btnText, callback)
             local Card = create("TextButton", {
                 Size = UDim2.new(1, 0, 0, 36),
@@ -877,7 +984,7 @@ function Library:CreateInterface(titleText, descText, discordLink, position, the
             return Card
         end
 
-        -- Comment / Header Divider
+        -- 8. Info / Warning / Tip Labels
         function TabObj:CreateComment(text)
             local Card = create("Frame", {
                 Size = UDim2.new(1, 0, 0, 28),
@@ -918,7 +1025,7 @@ function Library:CreateInterface(titleText, descText, discordLink, position, the
             return CommentObj
         end
 
-        -- 6. Searchable Dropdown
+        -- 9. Searchable Dropdown
         function TabObj:CreateDropDown(dropTitle, callback)
             local isOpen = false
 
