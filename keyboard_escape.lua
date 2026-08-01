@@ -1,16 +1,17 @@
 --[[
-    Keyboard Escape - Standalone Script Suite (keyboard_escape.lua)
+    Keyboard Escape - Custom Script Suite (keyboard_escape.lua)
     Features: 
       - Fast Summer Coins Auto Farm (0.1s Teleport & Anti-Death Persistence)
+      - Secret Key Auto Farm (Teleports to Workspace.SpecialKeys items with "Key" in name)
       - Player Tab (WalkSpeed 0-500, JumpPower 0-500)
       - Fly System with FlySpeed Slider (0-300)
+    Powered by Custom UI Framework (lib.lua)
 ]]
 
 local Players = game:GetService("Players")
 local Workspace = game:GetService("Workspace")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
-local CoreGui = game:GetService("CoreGui")
 
 local LocalPlayer = Players.LocalPlayer
 
@@ -32,19 +33,20 @@ for _, url in ipairs(loadAttempts) do
 end
 
 if not Library then
-    warn("[Keyboard Escape Error] UI Library raw URL unreachable. Loading Standalone ScreenGui...")
+    warn("[Keyboard Escape Error] UI Library raw URL unreachable.")
     return
 end
 
-local int = Library:CreateInterface("Keyboard Escape", "Summer Coins & Fly Utilities", "", "bottom left", "royal", 0.25)
+local int = Library:CreateInterface("Keyboard Escape", "Summer Coins, Secret Keys & Fly Utilities", "", "bottom left", "royal", 0.25)
 
-local farmTab = int:CreateTab("Farm", "Coin Farming Utilities", "item", true)
+local farmTab = int:CreateTab("Farm", "Farming Utilities", "item", true)
 local playerTab = int:CreateTab("Player", "Movement & Speed Controls", "player")
 local settingsTab = int:CreateTab("Settings", "UI Customization", "misc")
 
 -- Config State
 local Config = {
     SummerCoinsFarm = false,
+    SecretKeyFarm = false,
     WalkSpeed = 16,
     JumpPower = 50,
     ModifySpeed = false,
@@ -170,7 +172,7 @@ LocalPlayer.CharacterAdded:Connect(function(newChar)
 end)
 
 -- --------------------------------------------------------------------
--- FAST SUMMER COINS FARM LOOP (0.1s Interval & Anti-Death Persistence)
+-- 1. FAST SUMMER COINS FARM LOOP (0.1s Interval & Anti-Death Persistence)
 -- --------------------------------------------------------------------
 task.spawn(function()
     while true do
@@ -203,6 +205,40 @@ task.spawn(function()
     end
 end)
 
+-- --------------------------------------------------------------------
+-- 2. SECRET KEYS FARM LOOP (Teleports to Workspace.SpecialKeys items)
+-- --------------------------------------------------------------------
+task.spawn(function()
+    while true do
+        task.wait(0.1)
+        if Config.SecretKeyFarm then
+            pcall(function()
+                local char = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+                local hrp = char and (char:FindFirstChild("HumanoidRootPart") or char:WaitForChild("HumanoidRootPart", 2))
+                local humanoid = char and char:FindFirstChildOfClass("Humanoid")
+
+                if not hrp or not humanoid or humanoid.Health <= 0 then return end
+
+                local keysFolder = Workspace:FindFirstChild("SpecialKeys")
+                if keysFolder then
+                    for _, item in ipairs(keysFolder:GetChildren()) do
+                        if not Config.SecretKeyFarm then break end
+                        if humanoid.Health <= 0 then break end
+
+                        if string.find(item.Name:lower(), "key") then
+                            local targetCF = item:IsA("Model") and item:GetPivot() or (item:IsA("BasePart") and item.CFrame)
+                            if targetCF then
+                                hrp.CFrame = targetCF + Vector3.new(0, 2, 0)
+                                task.wait(0.1)
+                            end
+                        end
+                    end
+                end
+            end)
+        end
+    end
+end)
+
 
 -- --------------------------------------------------------------------
 -- UI TAB 1: FARM CONTROLS
@@ -213,6 +249,15 @@ farmTab:CreateToggleSwitch("Summer Coins Farm (0.1s Fast Teleport)", false, func
         Library:Notify("Keyboard Escape", "Fast Summer Coins Farm Active (0.1s)!", 1.5)
     else
         Library:Notify("Keyboard Escape", "Summer Coins Farm Stopped.", 1.5)
+    end
+end)
+
+farmTab:CreateToggleSwitch("Secret Key Farm (0.1s Fast Teleport)", false, function(val)
+    Config.SecretKeyFarm = val
+    if val then
+        Library:Notify("Keyboard Escape", "Secret Key Farm Active!", 1.5)
+    else
+        Library:Notify("Keyboard Escape", "Secret Key Farm Stopped.", 1.5)
     end
 end)
 
@@ -275,4 +320,4 @@ settingsTab:CreateSlider("Window Transparency", 0, 90, 25, function(val)
     int:SetTransparency(val / 100)
 end)
 
-print("[Keyboard Escape Suite] Engine Loaded!")
+print("[Keyboard Escape Suite] Secret Key Farm Added!")
