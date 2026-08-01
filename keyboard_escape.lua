@@ -1,6 +1,6 @@
 --[[
     Keyboard Escape - Custom Script Suite (keyboard_escape.lua)
-    Features: Summer Coins Auto Farm & Player Tab (WalkSpeed 0-500, JumpPower 0-500)
+    Features: Summer Coins Fast Auto Farm (0.1s Teleport Interval & Persists Across Death)
     Powered by Custom UI Framework (lib.lua)
 ]]
 
@@ -66,26 +66,30 @@ LocalPlayer.CharacterAdded:Connect(function(newChar)
 end)
 
 -- --------------------------------------------------------------------
--- SUMMER COINS FARM LOOP (Teleports every 1 second)
+-- FAST SUMMER COINS FARM LOOP (0.1s Interval & Anti-Death Persistence)
 -- --------------------------------------------------------------------
 task.spawn(function()
     while true do
-        task.wait(1)
+        task.wait(0.1)
         if Config.SummerCoinsFarm then
             pcall(function()
-                local char = LocalPlayer.Character
-                local hrp = char and char:FindFirstChild("HumanoidRootPart")
-                if not hrp then return end
+                local char = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+                local hrp = char and (char:FindFirstChild("HumanoidRootPart") or char:WaitForChild("HumanoidRootPart", 2))
+                local humanoid = char and char:FindFirstChildOfClass("Humanoid")
+                
+                if not hrp or not humanoid or humanoid.Health <= 0 then return end
 
                 local coinsFolder = Workspace:FindFirstChild("SummerCoinsLocal")
                 if coinsFolder then
                     for _, item in ipairs(coinsFolder:GetChildren()) do
                         if not Config.SummerCoinsFarm then break end
+                        if humanoid.Health <= 0 then break end
+                        
                         if item.Name == "SummerCoin" then
                             local targetCF = item:IsA("Model") and item:GetPivot() or (item:IsA("BasePart") and item.CFrame)
                             if targetCF then
                                 hrp.CFrame = targetCF + Vector3.new(0, 2, 0)
-                                task.wait(1)
+                                task.wait(0.1)
                             end
                         end
                     end
@@ -99,10 +103,10 @@ end)
 -- --------------------------------------------------------------------
 -- UI TAB 1: FARM CONTROLS
 -- --------------------------------------------------------------------
-farmTab:CreateToggleSwitch("Summer Coins Farm", false, function(val)
+farmTab:CreateToggleSwitch("Summer Coins Farm (0.1s Fast Teleport)", false, function(val)
     Config.SummerCoinsFarm = val
     if val then
-        lib:Notify("Keyboard Escape", "Summer Coins Farm Started!", 1.5)
+        lib:Notify("Keyboard Escape", "Fast Summer Coins Farm Active (0.1s)!", 1.5)
     else
         lib:Notify("Keyboard Escape", "Summer Coins Farm Stopped.", 1.5)
     end
@@ -152,4 +156,4 @@ settingsTab:CreateSlider("Window Transparency", 0, 90, 25, function(val)
     int:SetTransparency(val / 100)
 end)
 
-print("[Keyboard Escape Suite] Player Frame Loaded!")
+print("[Keyboard Escape Suite] Fast Farm Engine Active!")
