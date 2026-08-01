@@ -210,7 +210,7 @@ end
 function Library:CreateInterface(titleText, descText, discordLink, position, themeName, bgTransparency)
     local themeKey = tostring(themeName or "royal"):lower()
     local theme = DefaultThemes[themeKey] or DefaultThemes.royal
-    local glassTransparency = bgTransparency or 0.25 -- Glassmorphism semi-transparent default
+    local glassTransparency = bgTransparency or 0.25
 
     local parentGui = CoreGui
     pcall(function()
@@ -252,7 +252,7 @@ function Library:CreateInterface(titleText, descText, discordLink, position, the
     local MainStroke = create("UIStroke", { Color = theme.Stroke, Thickness = 1.8, Parent = MainFrame })
 
     -- Glass Gradient Accent Overlay
-    local GlassGradient = create("UIGradient", {
+    create("UIGradient", {
         Color = ColorSequence.new({
             ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 255, 255)),
             ColorSequenceKeypoint.new(1, Color3.fromRGB(180, 180, 200))
@@ -416,25 +416,6 @@ function Library:CreateInterface(titleText, descText, discordLink, position, the
         Parent = MainFrame
     })
 
-    -- Toggle Minimize Animation
-    MinimizeBtn.MouseButton1Click:Connect(function()
-        Minimized = not Minimized
-        if Minimized then
-            TweenService:Create(MainFrame, TweenInfo.new(0.3, Enum.EasingStyle.Quart), { Size = UDim2.new(0, 650, 0, 48) }):Play()
-            TabBar.Visible = false
-            for _, child in ipairs(ContentFolder:GetChildren()) do
-                child.Visible = false
-            end
-        else
-            TweenService:Create(MainFrame, TweenInfo.new(0.3, Enum.EasingStyle.Quart), { Size = UDim2.new(0, 650, 0, 440) }):Play()
-            task.wait(0.15)
-            TabBar.Visible = true
-            if InterfaceObj and InterfaceObj.ActiveTab then
-                InterfaceObj.ActiveTab.TabContent.Visible = true
-            end
-        end
-    end)
-
     local InterfaceObj = {
         ScreenGui = ScreenGui,
         MainFrame = MainFrame,
@@ -445,6 +426,25 @@ function Library:CreateInterface(titleText, descText, discordLink, position, the
         Theme = theme,
         GlassTransparency = glassTransparency
     }
+
+    -- Toggle Minimize Animation with FIXED TAB RESTORE LOGIC
+    MinimizeBtn.MouseButton1Click:Connect(function()
+        Minimized = not Minimized
+        if Minimized then
+            TweenService:Create(MainFrame, TweenInfo.new(0.25, Enum.EasingStyle.Quart), { Size = UDim2.new(0, 650, 0, 48) }):Play()
+            TabBar.Visible = false
+            for _, t in ipairs(InterfaceObj.Tabs) do
+                t.TabContent.Visible = false
+            end
+        else
+            TweenService:Create(MainFrame, TweenInfo.new(0.25, Enum.EasingStyle.Quart), { Size = UDim2.new(0, 650, 0, 440) }):Play()
+            task.wait(0.12)
+            TabBar.Visible = true
+            if InterfaceObj.ActiveTab and InterfaceObj.ActiveTab.Activate then
+                InterfaceObj.ActiveTab.Activate()
+            end
+        end
+    end)
 
     function InterfaceObj:SetTransparency(transparencyVal)
         transparencyVal = math.clamp(transparencyVal or 0.25, 0, 0.9)
@@ -510,11 +510,12 @@ function Library:CreateInterface(titleText, descText, discordLink, position, the
 
         local TabObj = {
             TabBtn = TabBtn,
-            TabContent = TabContent
+            TabContent = TabContent,
+            Name = tabName
         }
 
         local function activateTab()
-            for _, t in pairs(InterfaceObj.Tabs) do
+            for _, t in ipairs(InterfaceObj.Tabs) do
                 t.TabContent.Visible = false
                 t.TabBtn.BackgroundColor3 = InterfaceObj.Theme.CardBg
                 t.TabBtn.TextColor3 = InterfaceObj.Theme.SubText
