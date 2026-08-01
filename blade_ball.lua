@@ -1,12 +1,14 @@
 --[[
-    Blade Ball - Inferno Precision Auto Parry & Auto Spam Engine (blade_ball.lua)
+    Blade Ball - High-Precision Sub-Frame Auto Parry Engine (blade_ball.lua)
     Powered by Custom UI Library (lib.lua) with Glassmorphism & Theme Switcher
 ]]
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
+local Stats = game:GetService("Stats")
 local UserInputService = game:GetService("UserInputService")
+local VirtualInputManager = game:GetService("VirtualInputManager")
 local Workspace = game:GetService("Workspace")
 
 local LocalPlayer = Players.LocalPlayer
@@ -23,49 +25,48 @@ if not success or not lib or type(lib) ~= "table" then
     return
 end
 
-local int = lib:CreateInterface("Blade Ball Suite", "Inferno Auto Parry Engine", "https://discord.gg/ZNTHTWx7KE", "bottom left", "royal", 0.25)
+local int = lib:CreateInterface("Blade Ball Suite", "Ultra-Precision Auto Parry Engine", "https://discord.gg/ZNTHTWx7KE", "bottom left", "royal", 0.25)
 
-local parryTab = int:CreateTab("Auto Parry", "Physics Impact & Deflect Controls", "item", true)
+local parryTab = int:CreateTab("Auto Parry", "Sub-Frame & Curve Prediction", "item", true)
 local spamTab = int:CreateTab("Spam Parry", "Auto Spam & Close Fighting", "op")
 local chatTab = int:CreateTab("Auto Chat", "Auto GG & Chat Responses", "player")
-local visualTab = int:CreateTab("Visuals", "Future Impact Visualizer", "visuals")
-local settingsTab = int:CreateTab("UI Settings", "Themes, Transparency & Controls", "misc")
+local visualTab = int:CreateTab("Visuals", "Ball Predictor & Visualizer", "visuals")
+local settingsTab = int:CreateTab("UI Settings", "Themes & Customization", "misc")
 
--- Exact Threshold & Formula Constants
-local BASE_THRESHOLD = 0.2
-local VELOCITY_SCALING_FACTOR_FAST = 0.050
-local VELOCITY_SCALING_FACTOR_SLOW = 0.1
-local IMMEDIATE_PARRY_DISTANCE = 15
+-- Config & State
+local Config = {
+    AutoParry = true,
+    AutoSpam = false,
+    SpamDistance = 8,
+    ParryOffset = 5,
+    CurvePrediction = true,
+    PingCompensation = true,
+    UseAbility = false,
+    NotifyParried = false,
+    AutoGG = false,
+    AutoResponse = false,
+    LastParryTick = 0
+}
 
 local responses = {"lol what", "??", "wdym", "bru what", "mad cuz bad", "skill issue", "cry"}
 local gameEndResponses = {"ggs", "gg :3", "good game", "ggs yall", "wp", "ggs man"}
 local keywords = {"auto parry", "auto", "cheating", "hacking"}
-
--- State Variables
-local focusedBall = nil
-local distanceVisualizer = nil
-local isRunning = false
-local autoSpamEnabled = false
-local autoSpamDistance = 7 -- Standard 7 Studs distance as requested
-local UseRage = false
-local sliderValue = 20
-local notifyparried = false
-local AutoGG = false
-local AutoResponse = false
 local ggdebounce = false
 local responsedebounce = false
 
--- Workspace & Remotes Setup
+local focusedBall = nil
+local distanceVisualizer = nil
+local lastBallPosition = Vector3.new()
+local ballVelocityVector = Vector3.new()
+
+-- Remotes & Character
 local ballsFolder = Workspace:WaitForChild("Balls")
 local remotesFolder = ReplicatedStorage:WaitForChild("Remotes")
-local parryButtonPress = remotesFolder:WaitForChild("ParryButtonPress")
-local abilityButtonPress = remotesFolder:WaitForChild("AbilityButtonPress")
+local parryRemote = remotesFolder:FindFirstChild("ParryButtonPress") or remotesFolder:FindFirstChild("ParryAttempt")
+local abilityRemote = remotesFolder:FindFirstChild("AbilityButtonPress") or remotesFolder:FindFirstChild("UseAbility")
 
 local character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
-
-LocalPlayer.CharacterAdded:Connect(function(newChar)
-    character = newChar
-end)
+LocalPlayer.CharacterAdded:Connect(function(c) character = c end)
 
 -- UI Gradients for Cooldown Check
 local function getUIGradients()
@@ -84,304 +85,279 @@ local function isCooldownInEffect(uigradient)
     return uigradient.Offset.Y < 0.5
 end
 
--- Fire Event (Supports both RemoteEvent and BindableEvent)
-local function triggerParry()
+-- Get Real Time Network Ping (in seconds)
+local function getNetworkPing()
+    local ping = 0.04
     pcall(function()
-        if parryButtonPress:IsA("BindableEvent") then
-            parryButtonPress:Fire()
-        elseif parryButtonPress:IsA("RemoteEvent") then
-            local camera = Workspace.CurrentCamera
-            local camCF = camera and camera.CFrame or CFrame.new()
-            parryButtonPress:FireServer(0.5, camCF, {}, {Vector2.new(0, 0)})
-        else
-            parryButtonPress:Fire()
+        local statsItem = Stats.Network.ServerStatsItem["Data Ping"]
+        if statsItem then
+            ping = statsItem:GetValue() / 1000
         end
+    end)
+    return math.clamp(ping, 0.015, 0.35)
+end
+
+-- Multi-Execution Parry Trigger (Guarantees zero missed inputs)
+local function fireParry()
+    local now = tick()
+    if now - Config.LastParryTick < 0.04 then return end
+    Config.LastParryTick = now
+
+    -- 1. Direct Remote Call
+    pcall(function()
+        if parryRemote then
+            if parryRemote:IsA("BindableEvent") then
+                parryRemote:Fire()
+            elseif parryRemote:IsA("RemoteEvent") then
+                local cam = Workspace.CurrentCamera
+                local camCF = cam and cam.CFrame or CFrame.new()
+                parryRemote:FireServer(0.5, camCF, {}, {Vector2.new(0, 0)})
+            end
+        end
+    end)
+
+    -- 2. Virtual Input Manager (F Key Press)
+    pcall(function()
+        VirtualInputManager:SendKeyPressEvent(Enum.KeyCode.F, true, game)
+        task.wait(0.001)
+        VirtualInputManager:SendKeyPressEvent(Enum.KeyCode.F, false, game)
+    end)
+
+    -- 3. Firesignal UI Fallback
+    pcall(function()
+        if type(firesignal) == "function" then
+            local pgui = LocalPlayer:FindFirstChild("PlayerGui")
+            local blockBtn = pgui and pgui:FindFirstChild("Block", true)
+            if blockBtn then
+                if blockBtn:FindFirstChild("MouseButton1Click") then
+                    firesignal(blockBtn.MouseButton1Click)
+                elseif blockBtn:FindFirstChild("Activated") then
+                    firesignal(blockBtn.Activated)
+                end
+            end
+        end
+    end)
+
+    if Config.NotifyParried then
+        lib:Notify("Auto Parry", "Parried Ball Successfully!", 0.4)
+    end
+end
+
+local function fireAbility()
+    pcall(function()
+        if abilityRemote then
+            if abilityRemote:IsA("BindableEvent") then
+                abilityRemote:Fire()
+            elseif abilityRemote:IsA("RemoteEvent") then
+                abilityRemote:FireServer()
+            end
+        end
+        VirtualInputManager:SendKeyPressEvent(Enum.KeyCode.Q, true, game)
+        task.wait(0.001)
+        VirtualInputManager:SendKeyPressEvent(Enum.KeyCode.Q, false, game)
     end)
 end
 
-local function triggerAbility()
-    pcall(function()
-        if abilityButtonPress:IsA("BindableEvent") then
-            abilityButtonPress:Fire()
-        elseif abilityButtonPress:IsA("RemoteEvent") then
-            abilityButtonPress:FireServer()
-        else
-            abilityButtonPress:Fire()
-        end
-    end)
-end
-
--- Focused Ball Selection
-local function chooseNewFocusedBall()
-    local balls = ballsFolder:GetChildren()
-    for _, ball in ipairs(balls) do
-        if ball:GetAttribute("realBall") == true or ball:GetAttribute("target") ~= nil then
-            focusedBall = ball
-            return focusedBall
+-- Find Active Ball
+local function getTargetBall()
+    for _, ball in ipairs(ballsFolder:GetChildren()) do
+        if ball:IsA("BasePart") and (ball:GetAttribute("realBall") == true or ball:GetAttribute("target") ~= nil) then
+            return ball
         end
     end
-    for _, ball in ipairs(balls) do
-        if ball:IsA("Part") or ball:IsA("MeshPart") then
-            focusedBall = ball
-            return focusedBall
-        end
+    for _, ball in ipairs(ballsFolder:GetChildren()) do
+        if ball:IsA("BasePart") then return ball end
     end
-    focusedBall = nil
     return nil
 end
 
--- Dynamic Threshold Formula
-local function getDynamicThreshold(ballVelocityMagnitude)
-    if ballVelocityMagnitude > 60 then
-        return math.max(0.20, BASE_THRESHOLD - (ballVelocityMagnitude * VELOCITY_SCALING_FACTOR_FAST))
-    else
-        return math.min(0.01, BASE_THRESHOLD + (ballVelocityMagnitude * VELOCITY_SCALING_FACTOR_SLOW))
-    end
-end
-
--- Exact Time Until Impact Formula
-local function timeUntilImpact(ballVelocity, distanceToPlayer, playerVelocity)
-    if not character or not character:FindFirstChild("HumanoidRootPart") or not focusedBall then return math.huge end
-    local directionToPlayer = (character.HumanoidRootPart.Position - focusedBall.Position).Unit
-    local velocityTowardsPlayer = ballVelocity:Dot(directionToPlayer) - playerVelocity:Dot(directionToPlayer)
-    
-    if velocityTowardsPlayer <= 0 then
-        return math.huge
-    end
-    
-    return (distanceToPlayer - sliderValue) / velocityTowardsPlayer
-end
-
--- Check if Ball is targeting LocalPlayer
-local function checkIfTarget()
-    for _, v in pairs(ballsFolder:GetChildren()) do
-        if v:IsA("Part") or v:IsA("MeshPart") then
-            if v.BrickColor == BrickColor.new("Really red") or v:GetAttribute("target") == LocalPlayer.Name then
-                return true
-            end
-        end
-    end
+-- Check if Ball Targets LocalPlayer
+local function isTargetingMe(ball)
+    if not ball then return false end
+    local targetAttr = ball:GetAttribute("target")
+    if targetAttr == LocalPlayer.Name then return true end
+    if ball.BrickColor == BrickColor.new("Really red") then return true end
     return false
 end
 
--- Distance Visualizer Part
-local function updateDistanceVisualizer()
-    local charPos = character and character.PrimaryPart and character.PrimaryPart.Position
-    if charPos and focusedBall and focusedBall.Parent then
-        if not distanceVisualizer or not distanceVisualizer.Parent then
-            distanceVisualizer = Instance.new("Part")
-            distanceVisualizer.Name = "ParryImpactVisualizer"
-            distanceVisualizer.Size = Vector3.new(1.5, 1.5, 1.5)
-            distanceVisualizer.Shape = Enum.PartType.Ball
-            distanceVisualizer.Color = Color3.fromRGB(0, 255, 150)
-            distanceVisualizer.Material = Enum.Material.Neon
-            distanceVisualizer.Anchored = true
-            distanceVisualizer.CanCollide = false
-            distanceVisualizer.Parent = Workspace
+-- --------------------------------------------------------------------
+-- SUB-FRAME HIGH-PRECISION PREDICTION LOOP (PreRender Hook)
+-- --------------------------------------------------------------------
+RunService.PreRender:Connect(function(deltaTime)
+    if not Config.AutoParry and not Config.AutoSpam then return end
+    if not character or not character:FindFirstChild("HumanoidRootPart") then return end
+
+    local ball = getTargetBall()
+    if not ball or not ball.Parent then
+        if distanceVisualizer then
+            distanceVisualizer:Destroy()
+            distanceVisualizer = nil
+        end
+        return
+    end
+
+    local hrp = character.HumanoidRootPart
+    local hrpPos = hrp.Position
+    local ballPos = ball.Position
+    local distance = (ballPos - hrpPos).Magnitude
+
+    -- Compute Instant Speed and Velocity
+    local currentVel = ball.AssemblyLinearVelocity
+    local speed = currentVel.Magnitude
+
+    if speed < 1 then
+        speed = (ballPos - lastBallPosition).Magnitude / math.max(deltaTime, 0.001)
+    end
+    lastBallPosition = ballPos
+
+    local isTarget = isTargetingMe(ball)
+
+    -- 1. Auto Spam Logic (Close Range Duel)
+    if Config.AutoSpam and isTarget and distance <= Config.SpamDistance then
+        fireParry()
+        return
+    end
+
+    -- 2. Precision Auto Parry Logic
+    if Config.AutoParry and isTarget then
+        local ping = Config.PingCompensation and getNetworkPing() or 0
+        local dirToPlayer = (hrpPos - ballPos).Unit
+        local dotVelocity = currentVel:Dot(dirToPlayer)
+
+        -- If ball is moving away from player, do not parry
+        if dotVelocity < -5 then return end
+
+        local effectiveSpeed = math.max(dotVelocity, speed, 1)
+
+        -- Dynamic Parry Distance Equation with Ping & Curve Compensation
+        -- Required Distance = (Speed * (Ping + ReactionTime)) + Offset
+        local pingDistanceCompensation = (effectiveSpeed * (ping + 0.04))
+        local curveCompensation = Config.CurvePrediction and (speed * 0.08) or 0
+        local triggerDistance = pingDistanceCompensation + curveCompensation + Config.ParryOffset + 12
+
+        -- Time to Impact Calculation (in seconds)
+        local timeToImpact = (distance - Config.ParryOffset) / effectiveSpeed
+
+        -- Check Ability Cooldowns
+        local uigrad1, uigrad2 = getUIGradients()
+
+        if distance <= triggerDistance or timeToImpact <= (ping + 0.14) then
+            local hasRage = character:FindFirstChild("Abilities") and (character.Abilities:FindFirstChild("Raging Deflection") or character.Abilities:FindFirstChild("Rapture"))
+
+            if hasRage and Config.UseAbility then
+                if uigrad2 and not isCooldownInEffect(uigrad2) then
+                    fireAbility()
+                elseif not uigrad1 or not isCooldownInEffect(uigrad1) then
+                    fireParry()
+                end
+            else
+                if not uigrad1 or not isCooldownInEffect(uigrad1) then
+                    fireParry()
+                end
+            end
         end
 
-        local timeToImpactValue = timeUntilImpact(focusedBall.Velocity, (focusedBall.Position - charPos).Magnitude, character.PrimaryPart.Velocity)
-        if timeToImpactValue ~= math.huge then
-            local ballFuturePosition = focusedBall.Position + (focusedBall.Velocity * timeToImpactValue)
-            distanceVisualizer.Position = ballFuturePosition
+        -- Update Visualizer Position
+        if Config.AutoParry then
+            if not distanceVisualizer or not distanceVisualizer.Parent then
+                distanceVisualizer = Instance.new("Part")
+                distanceVisualizer.Name = "ParryImpactVisualizer"
+                distanceVisualizer.Size = Vector3.new(1.5, 1.5, 1.5)
+                distanceVisualizer.Shape = Enum.PartType.Ball
+                distanceVisualizer.Color = Color3.fromRGB(0, 255, 150)
+                distanceVisualizer.Material = Enum.Material.Neon
+                distanceVisualizer.Anchored = true
+                distanceVisualizer.CanCollide = false
+                distanceVisualizer.Parent = Workspace
+            end
+            local predictedPos = ballPos + (currentVel * math.clamp(timeToImpact, 0, 1.5))
+            distanceVisualizer.Position = predictedPos
         end
     elseif distanceVisualizer then
         distanceVisualizer:Destroy()
         distanceVisualizer = nil
     end
-end
-
--- Primary Check Loop
-local function checkBallDistance()
-    if not character or not character:FindFirstChild("HumanoidRootPart") or not checkIfTarget() then return end
-
-    local charPos = character.PrimaryPart.Position
-    local charVel = character.PrimaryPart.Velocity
-
-    if focusedBall and not focusedBall.Parent then
-        chooseNewFocusedBall()
-    end
-    if not focusedBall then
-        chooseNewFocusedBall()
-    end
-    if not focusedBall then return end
-
-    local ball = focusedBall
-    local distanceToPlayer = (ball.Position - charPos).Magnitude
-    local ballVelocityTowardsPlayer = ball.Velocity:Dot((charPos - ball.Position).Unit)
-    
-    if distanceToPlayer < IMMEDIATE_PARRY_DISTANCE then
-        triggerParry()
-        task.wait()
-    end
-
-    local uigrad1, uigrad2 = getUIGradients()
-
-    if timeUntilImpact(ball.Velocity, distanceToPlayer, charVel) < getDynamicThreshold(ballVelocityTowardsPlayer) then
-        local hasRage = character:FindFirstChild("Abilities") and (character.Abilities:FindFirstChild("Raging Deflection") or character.Abilities:FindFirstChild("Rapture"))
-        
-        if hasRage and UseRage == true then
-            if uigrad2 and not isCooldownInEffect(uigrad2) then
-                triggerAbility()
-            end
-
-            if uigrad2 and isCooldownInEffect(uigrad2) and uigrad1 and not isCooldownInEffect(uigrad1) then
-                triggerParry()
-                if notifyparried then
-                    lib:Notify("Auto Parry", "Manually Parried Ball (Ability on CD)", 0.5)
-                end
-            end
-        elseif not uigrad1 or not isCooldownInEffect(uigrad1) then
-            triggerParry()
-            if notifyparried then
-                lib:Notify("Auto Parry", "Automatically Parried Ball!", 0.5)
-            end
-            task.wait(0.3)
-        end
-    end
-end
-
--- Auto Parry Loop Coroutine
-local function autoParryCoroutine()
-    while isRunning do
-        checkBallDistance()
-        updateDistanceVisualizer()
-        task.wait()
-    end
-end
-
-local function startAutoParry()
-    chooseNewFocusedBall()
-    isRunning = true
-    local co = coroutine.create(autoParryCoroutine)
-    coroutine.resume(co)
-end
-
-local function stopAutoParry()
-    isRunning = false
-    if distanceVisualizer then
-        distanceVisualizer:Destroy()
-        distanceVisualizer = nil
-    end
-end
-
--- --------------------------------------------------------------------
--- AUTO SPAM PARRY LOOP (Fires parry continuously when targeted within range)
--- --------------------------------------------------------------------
-RunService.RenderStepped:Connect(function()
-    if not autoSpamEnabled then return end
-    pcall(function()
-        if not character or not character:FindFirstChild("HumanoidRootPart") then return end
-        if not checkIfTarget() then return end
-
-        local ball = focusedBall or chooseNewFocusedBall()
-        if ball and ball.Parent then
-            local dist = (ball.Position - character.HumanoidRootPart.Position).Magnitude
-            if dist <= autoSpamDistance then
-                triggerParry()
-            end
-        end
-    end)
 end)
 
 
 -- --------------------------------------------------------------------
--- UI TAB 1: AUTO PARRY CONTROLS
+-- UI CONTROLS & BINDINGS
 -- --------------------------------------------------------------------
-parryTab:CreateToggleSwitch("Enable Precision Auto Parry", false, function(val)
+
+-- TAB 1: AUTO PARRY
+parryTab:CreateToggleSwitch("Enable Sub-Frame Auto Parry", true, function(val)
+    Config.AutoParry = val
     if val then
-        startAutoParry()
-        lib:Notify("Auto Parry", "Auto Parry Engine Active!", 1.5)
+        lib:Notify("Auto Parry", "Ultra-Precision Engine Active!", 1.5)
     else
-        stopAutoParry()
-        lib:Notify("Auto Parry", "Auto Parry Disabled.", 1.5)
+        lib:Notify("Auto Parry", "Auto Parry Disabled", 1.5)
     end
+end)
+
+parryTab:CreateToggleSwitch("Enable Curve Ball Prediction", true, function(val)
+    Config.CurvePrediction = val
+end)
+
+parryTab:CreateToggleSwitch("Enable Ping Compensation", true, function(val)
+    Config.PingCompensation = val
 end)
 
 parryTab:CreateToggleSwitch("Auto Rage / Rapture Ability Parry", false, function(val)
-    UseRage = val
-    if val and not isRunning then
-        startAutoParry()
-    end
+    Config.UseAbility = val
 end)
 
-parryTab:CreateSlider("Parry Distance Offset", 0, 100, 20, function(val)
-    sliderValue = val
+parryTab:CreateSlider("Parry Distance Offset", 0, 50, 5, function(val)
+    Config.ParryOffset = val
 end)
 
 parryTab:CreateToggleSwitch("Notify When Parried", false, function(val)
-    notifyparried = val
+    Config.NotifyParried = val
 end)
 
 
--- --------------------------------------------------------------------
--- UI TAB 2: AUTO SPAM PARRY & KEYBINDS
--- --------------------------------------------------------------------
+-- TAB 2: SPAM PARRY
 spamTab:CreateToggleSwitch("Enable Auto Spam Parry", false, function(val)
-    autoSpamEnabled = val
+    Config.AutoSpam = val
     if val then
-        lib:Notify("Auto Spam", "Auto Spam Active (Target & Distance check)", 1.5)
+        lib:Notify("Auto Spam", "Auto Spam Active!", 1.5)
     else
         lib:Notify("Auto Spam", "Auto Spam Disabled", 1.5)
     end
 end)
 
-spamTab:CreateSlider("Auto Spam Trigger Distance (Studs)", 2, 40, 7, function(val)
-    autoSpamDistance = val
+spamTab:CreateSlider("Auto Spam Distance (Studs)", 2, 30, 8, function(val)
+    Config.SpamDistance = val
 end)
 
 spamTab:CreateKeybind("Spam Parry Manual (Keybind C)", Enum.KeyCode.C, function()
-    triggerParry()
+    fireParry()
 end)
 
-spamTab:CreateKeybind("+10 Range (Keybind X)", Enum.KeyCode.X, function()
-    if sliderValue < 200 then
-        sliderValue = sliderValue + 10
-        lib:Notify("Range Increased", "New Range: " .. sliderValue, 1)
-    end
+spamTab:CreateKeybind("+5 Range (Keybind X)", Enum.KeyCode.X, function()
+    Config.ParryOffset = math.min(Config.ParryOffset + 5, 50)
+    lib:Notify("Range Increased", "New Offset: " .. Config.ParryOffset, 1)
 end)
 
-spamTab:CreateKeybind("-10 Range (Keybind Z)", Enum.KeyCode.Z, function()
-    if sliderValue > 0 then
-        sliderValue = sliderValue - 10
-        lib:Notify("Range Decreased", "New Range: " .. sliderValue, 1)
-    end
-end)
-
-spamTab:CreateKeybind("Set Distance to 30 (Keybind V)", Enum.KeyCode.V, function()
-    sliderValue = 30
-    lib:Notify("Range Set", "New Range: 30", 1)
-end)
-
-spamTab:CreateKeybind("Set Distance to 100 (Keybind B)", Enum.KeyCode.B, function()
-    sliderValue = 100
-    lib:Notify("Range Set", "New Range: 100", 1)
+spamTab:CreateKeybind("-5 Range (Keybind Z)", Enum.KeyCode.Z, function()
+    Config.ParryOffset = math.max(Config.ParryOffset - 5, 0)
+    lib:Notify("Range Decreased", "New Offset: " .. Config.ParryOffset, 1)
 end)
 
 
--- --------------------------------------------------------------------
--- UI TAB 3: AUTO CHAT & AUTO GG
--- --------------------------------------------------------------------
+-- TAB 3: AUTO CHAT
 chatTab:CreateToggleSwitch("Auto GG on Match End", false, function(val)
-    AutoGG = val
+    Config.AutoGG = val
 end)
 
 chatTab:CreateToggleSwitch("Auto Chat Response on Accusation", false, function(val)
-    AutoResponse = val
+    Config.AutoResponse = val
 end)
 
-chatTab:CreateTextbox("Custom GG Message", "ggs yall", "ggs", function(text)
-    if text and text ~= "" then
-        table.insert(gameEndResponses, text)
-        lib:Notify("Chat Customizer", "Added GG response: " .. text, 1.5)
-    end
-end)
-
--- Auto GG Event
+-- Auto GG Listener
 local aliveFolder = Workspace:FindFirstChild("Alive")
 if aliveFolder then
     aliveFolder.ChildRemoved:Connect(function()
-        if AutoGG and #aliveFolder:GetChildren() <= 1 and not ggdebounce then
+        if Config.AutoGG and #aliveFolder:GetChildren() <= 1 and not ggdebounce then
             ggdebounce = true
             local choice = gameEndResponses[math.random(1, #gameEndResponses)]
             task.wait(math.random(2, 3.5))
@@ -394,10 +370,10 @@ if aliveFolder then
     end)
 end
 
--- Auto Response Event
+-- Auto Response Listener
 pcall(function()
     Players.PlayerChatted:Connect(function(chatType, player, message)
-        if AutoResponse and player ~= LocalPlayer and not responsedebounce then
+        if Config.AutoResponse and player ~= LocalPlayer and not responsedebounce then
             for _, kw in ipairs(keywords) do
                 if string.find(message:lower(), kw) then
                     responsedebounce = true
@@ -416,9 +392,7 @@ pcall(function()
 end)
 
 
--- --------------------------------------------------------------------
--- UI TAB 4: UI SETTINGS & GLASS TRANSPARENCY
--- --------------------------------------------------------------------
+-- TAB 4: SETTINGS & THEMES
 local themeDrop = settingsTab:CreateDropDown("Select UI Theme", function() end)
 
 local themesList = {"royal", "cyber", "emerald", "dark", "midnight", "blood", "gold", "neon"}
@@ -433,4 +407,4 @@ settingsTab:CreateSlider("Glass Window Transparency", 0, 90, 25, function(val)
     int:SetTransparency(val / 100)
 end)
 
-print("[Blade Ball Suite] Auto Spam Engine added successfully!")
+print("[Blade Ball Suite] Sub-Frame Ultra Precision Parry Engine Active!")
