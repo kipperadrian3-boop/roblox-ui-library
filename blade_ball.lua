@@ -1,6 +1,6 @@
 --[[
     Blade Ball - Inferno Precision Auto Parry Engine (blade_ball.lua)
-    Exact Physics-Based Dynamic Impact Calculation & Auto Parry/Spam
+    Powered by Custom UI Library (lib.lua) with Glassmorphism & Theme Switcher
 ]]
 
 local Players = game:GetService("Players")
@@ -13,7 +13,7 @@ local LocalPlayer = Players.LocalPlayer
 
 local REPO_URL = "https://raw.githubusercontent.com/kipperadrian3-boop/roblox-ui-library/main/"
 
--- Load UI Library Framework (lib.lua)
+-- Load Custom UI Library Framework (lib.lua)
 local success, lib = pcall(function()
     return loadstring(game:HttpGet(REPO_URL .. "lib.lua"))()
 end)
@@ -23,12 +23,13 @@ if not success or not lib or type(lib) ~= "table" then
     return
 end
 
-local int = lib:CreateInterface("Blade Ball Suite", "Inferno Auto Parry Engine", "https://discord.gg/ZNTHTWx7KE", "bottom left", "royal")
+local int = lib:CreateInterface("Blade Ball Suite", "Inferno Auto Parry Engine", "https://discord.gg/ZNTHTWx7KE", "bottom left", "royal", 0.25)
 
-local parryTab = int:CreateTab("Auto Parry", "Physics Impact & Target Deflect", "item", true)
+local parryTab = int:CreateTab("Auto Parry", "Physics Impact & Deflect Controls", "item", true)
 local spamTab = int:CreateTab("Spam Parry", "Close Fighting & Keybind Spam", "op")
 local chatTab = int:CreateTab("Auto Chat", "Auto GG & Chat Responses", "player")
 local visualTab = int:CreateTab("Visuals", "Future Impact Visualizer", "visuals")
+local settingsTab = int:CreateTab("UI Settings", "Themes, Transparency & Controls", "misc")
 
 -- Exact Threshold & Formula Constants
 local BASE_THRESHOLD = 0.2
@@ -283,7 +284,7 @@ parryTab:CreateToggleSwitch("Auto Rage / Rapture Ability Parry", false, function
     end
 end)
 
-local distSlider = parryTab:CreateSlider("Parry Distance Offset", 0, 100, 20, function(val)
+parryTab:CreateSlider("Parry Distance Offset", 0, 100, 20, function(val)
     sliderValue = val
 end)
 
@@ -335,6 +336,13 @@ chatTab:CreateToggleSwitch("Auto Chat Response on Accusation", false, function(v
     AutoResponse = val
 end)
 
+chatTab:CreateTextbox("Custom GG Message", "ggs yall", "ggs", function(text)
+    if text and text ~= "" then
+        table.insert(gameEndResponses, text)
+        lib:Notify("Chat Customizer", "Added GG response: " .. text, 1.5)
+    end
+end)
+
 -- Auto GG Event
 local aliveFolder = Workspace:FindFirstChild("Alive")
 if aliveFolder then
@@ -373,4 +381,22 @@ pcall(function()
     end)
 end)
 
-print("[Blade Ball Inferno Suite] Loaded Successfully!")
+
+-- --------------------------------------------------------------------
+-- UI TAB 4: UI SETTINGS & GLASS TRANSPARENCY
+-- --------------------------------------------------------------------
+local themeDrop = settingsTab:CreateDropDown("Select UI Theme", function() end)
+
+local themesList = {"royal", "cyber", "emerald", "dark", "midnight", "blood", "gold", "neon"}
+for _, themeName in ipairs(themesList) do
+    themeDrop:AddButton("Theme: " .. themeName:upper(), function()
+        int:SetTheme(themeName)
+        lib:Notify("UI Theme", "Theme changed to " .. themeName:upper(), 1.5)
+    end)
+end
+
+settingsTab:CreateSlider("Glass Window Transparency", 0, 90, 25, function(val)
+    int:SetTransparency(val / 100)
+end)
+
+print("[Blade Ball Suite] Fully powered by Custom Glassmorphic UI Library (lib.lua)!")
