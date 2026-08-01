@@ -61,7 +61,7 @@ pcall(function()
     end
 end)
 
--- Fallback Seed Items (From provided game configuration)
+-- Fallback Seed Items
 if #SeedsList == 0 then
     SeedsList = {
         "Carrot", "Strawberry", "Blueberry", "Orange Tulip", "Buttercup", "Big Buttercup", "Bigger Buttercup", "Biggest Buttercup",
@@ -114,19 +114,28 @@ table.sort(SeedsList)
 table.sort(GearsList)
 table.sort(EggsList)
 
--- Remote Finder Utility
-local function findRemote(possibleNames)
+-- Dynamic Remote Finder & Execution Helper
+local cachedRemotes = {}
+
+local function findRemoteDynamic(possibleNames)
+    local cacheKey = table.concat(possibleNames, "_")
+    if cachedRemotes[cacheKey] and cachedRemotes[cacheKey]:IsDescendantOf(game) then
+        return cachedRemotes[cacheKey]
+    end
+
     for _, name in ipairs(possibleNames) do
         local remote = ReplicatedStorage:FindFirstChild(name, true)
         if remote and (remote:IsA("RemoteEvent") or remote:IsA("RemoteFunction")) then
+            cachedRemotes[cacheKey] = remote
             return remote
         end
     end
-    -- Scan all descendants
+
     for _, desc in ipairs(ReplicatedStorage:GetDescendants()) do
         if desc:IsA("RemoteEvent") or desc:IsA("RemoteFunction") then
             for _, name in ipairs(possibleNames) do
                 if string.find(desc.Name:lower(), name:lower()) then
+                    cachedRemotes[cacheKey] = desc
                     return desc
                 end
             end
@@ -135,19 +144,17 @@ local function findRemote(possibleNames)
     return nil
 end
 
-local seedRemote = findRemote({"BuySeedStock", "BuySeed", "BuyItem", "PurchaseSeed"})
-local gearRemote = findRemote({"BuyGearShop", "BuyGear", "BuyEquipment", "PurchaseGear"})
-local eggRemote  = findRemote({"BuyPetEgg", "BuyEgg", "PurchaseEgg", "BuyPet"})
-
-local function triggerBuy(remote, itemValue)
-    if not remote then return end
-    pcall(function()
-        if remote:IsA("RemoteEvent") then
-            remote:FireServer(itemValue)
-        elseif remote:IsA("RemoteFunction") then
-            remote:InvokeServer(itemValue)
-        end
-    end)
+local function triggerBuyDynamic(remoteNames, itemValue)
+    local remote = findRemoteDynamic(remoteNames)
+    if remote then
+        pcall(function()
+            if remote:IsA("RemoteEvent") then
+                remote:FireServer(itemValue)
+            elseif remote:IsA("RemoteFunction") then
+                remote:InvokeServer(itemValue)
+            end
+        end)
+    end
 end
 
 -- ==================== SEED SHOP ====================
@@ -163,24 +170,26 @@ for _, name in ipairs(SeedsList) do
     end)
 end
 
-seedTab:CreateCheckbox("Auto Buy Selected Seed (Every 0.2s)", function(state)
+seedTab:CreateCheckbox("Auto Buy Selected Seed", function(state)
     autoBuySeedToggle = state
 end)
 
-seedTab:CreateCheckbox("Auto Buy ALL Seeds (Every 0.2s)", function(state)
+seedTab:CreateCheckbox("Auto Buy ALL Seeds", function(state)
     autoBuyAllSeedsToggle = state
 end)
 
--- Seed Purchaser Loop
+-- Continuous Seed Purchaser Loop
 task.spawn(function()
+    local seedRemoteNames = {"BuySeedStock", "BuySeed", "BuyItem", "PurchaseSeed", "Buy"}
     while true do
-        task.wait(0.2)
+        task.wait(0.1)
         if autoBuySeedToggle and selectedSeed then
-            triggerBuy(seedRemote, selectedSeed)
+            triggerBuyDynamic(seedRemoteNames, selectedSeed)
         end
         if autoBuyAllSeedsToggle then
             for _, seedName in ipairs(SeedsList) do
-                triggerBuy(seedRemote, seedName)
+                if not autoBuyAllSeedsToggle then break end
+                triggerBuyDynamic(seedRemoteNames, seedName)
                 task.wait(0.05)
             end
         end
@@ -201,24 +210,26 @@ for _, name in ipairs(GearsList) do
     end)
 end
 
-gearTab:CreateCheckbox("Auto Buy Selected Gear (Every 0.2s)", function(state)
+gearTab:CreateCheckbox("Auto Buy Selected Gear", function(state)
     autoBuyGearToggle = state
 end)
 
-gearTab:CreateCheckbox("Auto Buy ALL Gears (Every 0.2s)", function(state)
+gearTab:CreateCheckbox("Auto Buy ALL Gears", function(state)
     autoBuyAllGearsToggle = state
 end)
 
--- Gear Purchaser Loop
+-- Continuous Gear Purchaser Loop
 task.spawn(function()
+    local gearRemoteNames = {"BuyGearShop", "BuyGear", "BuyEquipment", "PurchaseGear", "Buy"}
     while true do
-        task.wait(0.2)
+        task.wait(0.1)
         if autoBuyGearToggle and selectedGear then
-            triggerBuy(gearRemote, selectedGear)
+            triggerBuyDynamic(gearRemoteNames, selectedGear)
         end
         if autoBuyAllGearsToggle then
             for _, gearName in ipairs(GearsList) do
-                triggerBuy(gearRemote, gearName)
+                if not autoBuyAllGearsToggle then break end
+                triggerBuyDynamic(gearRemoteNames, gearName)
                 task.wait(0.05)
             end
         end
@@ -239,24 +250,26 @@ for _, name in ipairs(EggsList) do
     end)
 end
 
-eggTab:CreateCheckbox("Auto Buy Selected Pet Egg (Every 0.2s)", function(state)
+eggTab:CreateCheckbox("Auto Buy Selected Pet Egg", function(state)
     autoBuyEggToggle = state
 end)
 
-eggTab:CreateCheckbox("Auto Buy ALL Pet Eggs (Every 0.2s)", function(state)
+eggTab:CreateCheckbox("Auto Buy ALL Pet Eggs", function(state)
     autoBuyAllEggsToggle = state
 end)
 
--- Egg Purchaser Loop
+-- Continuous Egg Purchaser Loop
 task.spawn(function()
+    local eggRemoteNames = {"BuyPetEgg", "BuyEgg", "PurchaseEgg", "BuyPet", "Buy"}
     while true do
-        task.wait(0.2)
+        task.wait(0.1)
         if autoBuyEggToggle and selectedEgg then
-            triggerBuy(eggRemote, selectedEgg)
+            triggerBuyDynamic(eggRemoteNames, selectedEgg)
         end
         if autoBuyAllEggsToggle then
             for _, eggName in ipairs(EggsList) do
-                triggerBuy(eggRemote, eggName)
+                if not autoBuyAllEggsToggle then break end
+                triggerBuyDynamic(eggRemoteNames, eggName)
                 task.wait(0.05)
             end
         end
@@ -276,18 +289,18 @@ autoTab:CreateCheckbox("Auto Sell Harvested Crops", function(state)
     autoSellToggle = state
 end)
 
--- Farm Loop
+-- Continuous Farm Loop
 task.spawn(function()
     while true do
-        task.wait(0.5)
+        task.wait(0.3)
         if autoHarvestToggle then
-            local harvestRemote = findRemote({"HarvestCrop", "Harvest", "PickCrop", "CollectFruit"})
+            local harvestRemote = findRemoteDynamic({"HarvestCrop", "Harvest", "PickCrop", "CollectFruit"})
             if harvestRemote then
                 pcall(function() harvestRemote:FireServer() end)
             end
         end
         if autoSellToggle then
-            local sellRemote = findRemote({"SellCrop", "SellAll", "SellInventory", "MerchantSell"})
+            local sellRemote = findRemoteDynamic({"SellCrop", "SellAll", "SellInventory", "MerchantSell"})
             if sellRemote then
                 pcall(function() sellRemote:FireServer() end)
             end
