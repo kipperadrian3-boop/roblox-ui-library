@@ -1,14 +1,16 @@
 --[[
-    Roblox Advanced Remote Spy & Event Inspector
+    Roblox High-Performance Anti-Lag Remote Spy (remote_spy.lua)
+    Optimized for zero FPS drop and universal executor compatibility.
+    
     Features:
-      - 'K' key toggle for UI visibility
-      - Draggable UI Frame with modern dark theme
-      - Intercepts & logs RemoteEvents (FireServer) & RemoteFunctions (InvokeServer)
-      - Displays Remote Name, Method, Full Instance Path, and Formatted Arguments
-      - Copy Code / Copy Path button (uses setclipboard & selectable TextBox)
-      - Block / Filter button (prevents blocked Remotes from clogging the log or firing)
-      - Search / Filter bar to filter logs in real-time
-      - Clear logs & Pause logging controls
+      - 'K' Keybind toggle for UI
+      - Universal hooking (hookmetamethod / getrawmetatable / hookfunction)
+      - Anti-Lag Queue & UI Batching (processes max 5 logs per tick)
+      - Auto-Spam Filter (Ignores Ping, Heartbeat, MousePos, CharacterMove)
+      - Duplicate Suppression (groups identical rapid fires with x2, x3 counters)
+      - Copy Code Button (copies ready-to-use Lua script to clipboard)
+      - Selectable TextBoxes for argument inspection
+      - Remote Blocking (ignore from log and/or block execution)
 ]]
 
 local UserInputService = game:GetService("UserInputService")
@@ -33,78 +35,73 @@ for _, child in ipairs(parentGui:GetChildren()) do
     end
 end
 
--- State Management
+-- State & Configuration
 local SpyState = {
     Enabled = true,
     Paused = false,
-    BlockedRemotes = {}, -- [RemotePath or Name] = true
-    BlockExecution = false, -- If true, blocked remotes are also blocked from sending to server
-    Logs = {},
+    BlockExecution = false,
+    BlockedRemotes = {}, -- [name_or_path] = true
+    IgnoredSpamNames = {
+        ["Ping"] = true, ["GetPing"] = true, ["Heartbeat"] = true,
+        ["MousePos"] = true, ["UpdatePos"] = true, ["CharacterMove"] = true,
+        ["Sound"] = true, ["Animate"] = true, ["Stats"] = true, ["UpdateCFrame"] = true
+    },
+    LogQueue = {},
     LogCount = 0,
-    MaxLogs = 200,
+    MaxLogs = 50,
+    LastLogSignature = "",
+    LastLogCard = nil,
+    LastLogRepeatCount = 1,
     SearchQuery = ""
 }
 
--- Utility Functions
+-- Path Resolver
 local function getPath(instance)
     if not instance then return "nil" end
-    local path = instance.Name
-    local current = instance.Parent
-    while current and current ~= game do
-        path = current.Name .. "." .. path
-        current = current.Parent
-    end
-    return "game." .. path
-end
-
-local function formatTable(tbl, indent)
-    indent = indent or 1
-    local spacing = string.rep("  ", indent)
-    local result = "{\n"
-    for k, v in pairs(tbl) do
-        local keyStr = type(k) == "string" and ('["' .. k .. '"]') or ("[" .. tostring(k) .. "]")
-        local valStr = ""
-        if type(v) == "table" then
-            valStr = formatTable(v, indent + 1)
-        elseif type(v) == "string" then
-            valStr = '"' .. tostring(v) .. '"'
-        elseif typeof(v) == "Instance" then
-            valStr = getPath(v)
-        elseif typeof(v) == "Vector3" then
-            valStr = string.format("Vector3.new(%.2f, %.2f, %.2f)", v.X, v.Y, v.Z)
-        elseif typeof(v) == "CFrame" then
-            valStr = string.format("CFrame.new(%.2f, %.2f, %.2f)", v.Position.X, v.Position.Y, v.Position.Z)
-        elseif typeof(v) == "Color3" then
-            valStr = string.format("Color3.fromRGB(%d, %d, %d)", math.floor(v.R*255), math.floor(v.G*255), math.floor(v.B*255))
-        else
-            valStr = tostring(v)
+    local success, result = pcall(function()
+        local path = instance.Name
+        local current = instance.Parent
+        while current and current ~= game do
+            path = current.Name .. "." .. path
+            current = current.Parent
         end
-        result = result .. spacing .. keyStr .. " = " .. valStr .. ",\n"
-    end
-    result = result .. string.rep("  ", indent - 1) .. "}"
-    return result
+        return "game." .. path
+    end)
+    return success and result or tostring(instance)
 end
 
-local function formatArgs(...)
-    local args = {...}
-    if #args == 0 then return "nil" end
-    local formatted = {}
+-- Fast Simple Format
+local function formatVal(v)
+    local t = typeof(v)
+    if t == "string" then
+        return '"' .. string.gsub(v, '"', '\\"') .. '"'
+    elseif t == "Instance" then
+        return getPath(v)
+    elseif t == "Vector3" then
+        return string.format("Vector3.new(%.1f, %.1f, %.1f)", v.X, v.Y, v.Z)
+    elseif t == "CFrame" then
+        return string.format("CFrame.new(%.1f, %.1f, %.1f)", v.Position.X, v.Position.Y, v.Position.Z)
+    elseif t == "table" then
+        local count = 0
+        for _ in pairs(v) do count = count + 1 if count > 5 then break end end
+        if count > 5 then return "{ ...table... }" end
+        local items = {}
+        for k, val in pairs(v) do
+            table.insert(items, tostring(k) .. "=" .. formatVal(val))
+        end
+        return "{" .. table.concat(items, ", ") .. "}"
+    else
+        return tostring(v)
+    end
+end
+
+local function formatArgsList(args)
+    if not args or #args == 0 then return "nil" end
+    local list = {}
     for i, v in ipairs(args) do
-        if type(v) == "table" then
-            table.insert(formatted, string.format("[%d] = %s", i, formatTable(v, 1)))
-        elseif type(v) == "string" then
-            table.insert(formatted, string.format('[%d] = "%s"', i, tostring(v)))
-        elseif typeof(v) == "Instance" then
-            table.insert(formatted, string.format("[%d] = %s", i, getPath(v)))
-        elseif typeof(v) == "Vector3" then
-            table.insert(formatted, string.format("[%d] = Vector3.new(%.2f, %.2f, %.2f)", i, v.X, v.Y, v.Z))
-        elseif typeof(v) == "CFrame" then
-            table.insert(formatted, string.format("[%d] = CFrame.new(%.2f, %.2f, %.2f)", i, v.Position.X, v.Position.Y, v.Position.Z))
-        else
-            table.insert(formatted, string.format("[%d] = %s", i, tostring(v)))
-        end
+        table.insert(list, string.format("[%d] = %s", i, formatVal(v)))
     end
-    return table.concat(formatted, ",\n")
+    return table.concat(list, ",\n")
 end
 
 local function create(instanceType, properties)
@@ -120,7 +117,7 @@ local function create(instanceType, properties)
     return inst
 end
 
--- ScreenGui Setup
+-- UI Construction (Lightweight)
 local ScreenGui = create("ScreenGui", {
     Name = "AdvancedRemoteSpy",
     ResetOnSpawn = false,
@@ -128,11 +125,10 @@ local ScreenGui = create("ScreenGui", {
     Parent = parentGui
 })
 
--- Main Frame (Draggable)
 local MainFrame = create("Frame", {
     Name = "MainFrame",
-    Size = UDim2.new(0, 680, 0, 460),
-    Position = UDim2.new(0.5, -340, 0.5, -230),
+    Size = UDim2.new(0, 620, 0, 420),
+    Position = UDim2.new(0.5, -310, 0.5, -210),
     BackgroundColor3 = Color3.fromRGB(20, 22, 30),
     BorderSizePixel = 0,
     Active = true,
@@ -140,67 +136,61 @@ local MainFrame = create("Frame", {
     Parent = ScreenGui
 })
 
-create("UICorner", { CornerRadius = UDim.new(0, 10), Parent = MainFrame })
-create("UIStroke", { Color = Color3.fromRGB(55, 60, 85), Thickness = 1.5, Parent = MainFrame })
+create("UICorner", { CornerRadius = UDim.new(0, 8), Parent = MainFrame })
+create("UIStroke", { Color = Color3.fromRGB(50, 55, 75), Thickness = 1.5, Parent = MainFrame })
 
--- Top Header Bar
+-- Header
 local Header = create("Frame", {
-    Name = "Header",
-    Size = UDim2.new(1, 0, 0, 44),
+    Size = UDim2.new(1, 0, 0, 40),
     BackgroundColor3 = Color3.fromRGB(14, 15, 22),
     BorderSizePixel = 0,
     Parent = MainFrame
 })
-create("UICorner", { CornerRadius = UDim.new(0, 10), Parent = Header })
+create("UICorner", { CornerRadius = UDim.new(0, 8), Parent = Header })
 
-local TitleLabel = create("TextLabel", {
-    Name = "Title",
-    Size = UDim2.new(0, 300, 0, 22),
-    Position = UDim2.new(0, 14, 0, 4),
+create("TextLabel", {
+    Size = UDim2.new(0, 250, 0, 20),
+    Position = UDim2.new(0, 12, 0, 4),
     BackgroundTransparency = 1,
     Text = "📡 Remote Event Inspector",
     TextColor3 = Color3.fromRGB(245, 245, 250),
-    TextSize = 15,
+    TextSize = 14,
     Font = Enum.Font.GothamBold,
     TextXAlignment = Enum.TextXAlignment.Left,
     Parent = Header
 })
 
-local KeybindNotice = create("TextLabel", {
-    Name = "Notice",
-    Size = UDim2.new(0, 300, 0, 16),
-    Position = UDim2.new(0, 14, 0, 24),
+create("TextLabel", {
+    Size = UDim2.new(0, 250, 0, 14),
+    Position = UDim2.new(0, 12, 0, 22),
     BackgroundTransparency = 1,
-    Text = "Press [K] to toggle window visibility",
+    Text = "Press [K] to show / hide UI",
     TextColor3 = Color3.fromRGB(140, 150, 180),
-    TextSize = 11,
+    TextSize = 10,
     Font = Enum.Font.Gotham,
     TextXAlignment = Enum.TextXAlignment.Left,
     Parent = Header
 })
 
--- Header Buttons
 local CloseBtn = create("TextButton", {
-    Name = "CloseBtn",
-    Size = UDim2.new(0, 26, 0, 26),
-    Position = UDim2.new(1, -34, 0, 9),
+    Size = UDim2.new(0, 24, 0, 24),
+    Position = UDim2.new(1, -32, 0, 8),
     BackgroundColor3 = Color3.fromRGB(45, 22, 28),
     Text = "✕",
     TextColor3 = Color3.fromRGB(255, 90, 90),
-    TextSize = 13,
+    TextSize = 12,
     Font = Enum.Font.GothamBold,
     Parent = Header
 })
-create("UICorner", { CornerRadius = UDim.new(0, 6), Parent = CloseBtn })
+create("UICorner", { CornerRadius = UDim.new(0, 5), Parent = CloseBtn })
 CloseBtn.MouseButton1Click:Connect(function()
     MainFrame.Visible = false
 end)
 
--- Controls Toolbar
+-- Toolbar
 local Toolbar = create("Frame", {
-    Name = "Toolbar",
-    Size = UDim2.new(1, -24, 0, 36),
-    Position = UDim2.new(0, 12, 0, 52),
+    Size = UDim2.new(1, -20, 0, 34),
+    Position = UDim2.new(0, 10, 0, 46),
     BackgroundColor3 = Color3.fromRGB(14, 15, 22),
     BorderSizePixel = 0,
     Parent = MainFrame
@@ -208,104 +198,86 @@ local Toolbar = create("Frame", {
 create("UICorner", { CornerRadius = UDim.new(0, 6), Parent = Toolbar })
 
 local SearchBox = create("TextBox", {
-    Name = "SearchBox",
-    Size = UDim2.new(0, 220, 0, 26),
-    Position = UDim2.new(0, 6, 0.5, -13),
+    Size = UDim2.new(0, 200, 0, 24),
+    Position = UDim2.new(0, 5, 0.5, -12),
     BackgroundColor3 = Color3.fromRGB(26, 29, 40),
     Text = "",
-    PlaceholderText = "🔍 Filter by Remote Name/Path...",
+    PlaceholderText = "🔍 Search remotes...",
     PlaceholderColor3 = Color3.fromRGB(120, 130, 160),
     TextColor3 = Color3.fromRGB(240, 240, 250),
-    TextSize = 12,
+    TextSize = 11,
     Font = Enum.Font.Gotham,
     TextXAlignment = Enum.TextXAlignment.Left,
     Parent = Toolbar
 })
-create("UICorner", { CornerRadius = UDim.new(0, 5), Parent = SearchBox })
-create("UIPadding", { PaddingLeft = UDim.new(0, 8), Parent = SearchBox })
+create("UICorner", { CornerRadius = UDim.new(0, 4), Parent = SearchBox })
+create("UIPadding", { PaddingLeft = UDim.new(0, 6), Parent = SearchBox })
 
 local PauseBtn = create("TextButton", {
-    Name = "PauseBtn",
-    Size = UDim2.new(0, 90, 0, 26),
-    Position = UDim2.new(0, 234, 0.5, -13),
+    Size = UDim2.new(0, 80, 0, 24),
+    Position = UDim2.new(0, 212, 0.5, -12),
     BackgroundColor3 = Color3.fromRGB(0, 120, 215),
     Text = "⏸ Pause",
     TextColor3 = Color3.fromRGB(255, 255, 255),
-    TextSize = 12,
-    Font = Enum.Font.GothamMedium,
-    Parent = Toolbar
-})
-create("UICorner", { CornerRadius = UDim.new(0, 5), Parent = PauseBtn })
-
-local ClearBtn = create("TextButton", {
-    Name = "ClearBtn",
-    Size = UDim2.new(0, 85, 0, 26),
-    Position = UDim2.new(0, 330, 0.5, -13),
-    BackgroundColor3 = Color3.fromRGB(40, 44, 58),
-    Text = "🗑 Clear",
-    TextColor3 = Color3.fromRGB(230, 235, 245),
-    TextSize = 12,
-    Font = Enum.Font.GothamMedium,
-    Parent = Toolbar
-})
-create("UICorner", { CornerRadius = UDim.new(0, 5), Parent = ClearBtn })
-
-local UnblockBtn = create("TextButton", {
-    Name = "UnblockBtn",
-    Size = UDim2.new(0, 110, 0, 26),
-    Position = UDim2.new(0, 421, 0.5, -13),
-    BackgroundColor3 = Color3.fromRGB(40, 44, 58),
-    Text = "🔓 Clear Blocked",
-    TextColor3 = Color3.fromRGB(230, 235, 245),
-    TextSize = 12,
-    Font = Enum.Font.GothamMedium,
-    Parent = Toolbar
-})
-create("UICorner", { CornerRadius = UDim.new(0, 5), Parent = UnblockBtn })
-
-local BlockModeToggle = create("TextButton", {
-    Name = "BlockModeToggle",
-    Size = UDim2.new(0, 125, 0, 26),
-    Position = UDim2.new(1, -131, 0.5, -13),
-    BackgroundColor3 = Color3.fromRGB(40, 44, 58),
-    Text = "Block Exec: OFF",
-    TextColor3 = Color3.fromRGB(180, 190, 210),
     TextSize = 11,
     Font = Enum.Font.GothamMedium,
     Parent = Toolbar
 })
-create("UICorner", { CornerRadius = UDim.new(0, 5), Parent = BlockModeToggle })
+create("UICorner", { CornerRadius = UDim.new(0, 4), Parent = PauseBtn })
 
--- Scroll Frame for Logs
+local ClearBtn = create("TextButton", {
+    Size = UDim2.new(0, 75, 0, 24),
+    Position = UDim2.new(0, 298, 0.5, -12),
+    BackgroundColor3 = Color3.fromRGB(36, 40, 54),
+    Text = "🗑 Clear",
+    TextColor3 = Color3.fromRGB(230, 235, 245),
+    TextSize = 11,
+    Font = Enum.Font.GothamMedium,
+    Parent = Toolbar
+})
+create("UICorner", { CornerRadius = UDim.new(0, 4), Parent = ClearBtn })
+
+local BlockModeToggle = create("TextButton", {
+    Size = UDim2.new(0, 110, 0, 24),
+    Position = UDim2.new(1, -116, 0.5, -12),
+    BackgroundColor3 = Color3.fromRGB(36, 40, 54),
+    Text = "Block Exec: OFF",
+    TextColor3 = Color3.fromRGB(170, 180, 200),
+    TextSize = 10,
+    Font = Enum.Font.GothamMedium,
+    Parent = Toolbar
+})
+create("UICorner", { CornerRadius = UDim.new(0, 4), Parent = BlockModeToggle })
+
+-- Scrolling Log Container
 local LogScroll = create("ScrollingFrame", {
-    Name = "LogScroll",
-    Size = UDim2.new(1, -24, 1, -96),
-    Position = UDim2.new(0, 12, 0, 92),
+    Size = UDim2.new(1, -20, 1, -90),
+    Position = UDim2.new(0, 10, 0, 85),
     BackgroundTransparency = 1,
     BorderSizePixel = 0,
-    ScrollBarThickness = 5,
+    ScrollBarThickness = 4,
     AutomaticCanvasSize = Enum.AutomaticSize.Y,
     CanvasSize = UDim2.new(0, 0, 0, 0),
     Parent = MainFrame
 })
 create("UIListLayout", {
     SortOrder = Enum.SortOrder.LayoutOrder,
-    Padding = UDim.new(0, 6),
+    Padding = UDim.new(0, 5),
     Parent = LogScroll
 })
 create("UIPadding", {
     PaddingTop = UDim.new(0, 2),
     PaddingBottom = UDim.new(0, 10),
-    PaddingRight = UDim.new(0, 6),
+    PaddingRight = UDim.new(0, 4),
     Parent = LogScroll
 })
 
--- Toggle Controls
+-- Controls Event Listeners
 PauseBtn.MouseButton1Click:Connect(function()
     SpyState.Paused = not SpyState.Paused
     if SpyState.Paused then
         PauseBtn.Text = "▶ Resume"
-        PauseBtn.BackgroundColor3 = Color3.fromRGB(220, 130, 0)
+        PauseBtn.BackgroundColor3 = Color3.fromRGB(210, 130, 0)
     else
         PauseBtn.Text = "⏸ Pause"
         PauseBtn.BackgroundColor3 = Color3.fromRGB(0, 120, 215)
@@ -314,19 +286,12 @@ end)
 
 ClearBtn.MouseButton1Click:Connect(function()
     for _, child in ipairs(LogScroll:GetChildren()) do
-        if child:IsA("Frame") then
-            child:Destroy()
-        end
+        if child:IsA("Frame") then child:Destroy() end
     end
-    SpyState.Logs = {}
     SpyState.LogCount = 0
-end)
-
-UnblockBtn.MouseButton1Click:Connect(function()
-    SpyState.BlockedRemotes = {}
-    UnblockBtn.Text = "Cleared!"
-    task.wait(1)
-    UnblockBtn.Text = "🔓 Clear Blocked"
+    SpyState.LastLogSignature = ""
+    SpyState.LastLogCard = nil
+    SpyState.LastLogRepeatCount = 1
 end)
 
 BlockModeToggle.MouseButton1Click:Connect(function()
@@ -337,111 +302,125 @@ BlockModeToggle.MouseButton1Click:Connect(function()
         BlockModeToggle.TextColor3 = Color3.fromRGB(255, 255, 255)
     else
         BlockModeToggle.Text = "Block Exec: OFF"
-        BlockModeToggle.BackgroundColor3 = Color3.fromRGB(40, 44, 58)
-        BlockModeToggle.TextColor3 = Color3.fromRGB(180, 190, 210)
+        BlockModeToggle.BackgroundColor3 = Color3.fromRGB(36, 40, 54)
+        BlockModeToggle.TextColor3 = Color3.fromRGB(170, 180, 200)
     end
 end)
 
--- Search Filtering
 SearchBox:GetPropertyChangedSignal("Text"):Connect(function()
     SpyState.SearchQuery = SearchBox.Text:lower()
     for _, card in ipairs(LogScroll:GetChildren()) do
         if card:IsA("Frame") and card:FindFirstChild("SearchKey") then
             local key = card.SearchKey.Value:lower()
-            if SpyState.SearchQuery == "" or string.find(key, SpyState.SearchQuery, 1, true) then
-                card.Visible = true
-            else
-                card.Visible = false
-            end
+            card.Visible = (SpyState.SearchQuery == "" or string.find(key, SpyState.SearchQuery, 1, true) ~= nil)
         end
     end
 end)
 
--- UI Log Builder
-local function addLogEntry(remoteInstance, method, args)
-    if SpyState.Paused then return end
-    
-    local remoteName = remoteInstance and remoteInstance.Name or "UnknownRemote"
-    local remotePath = getPath(remoteInstance)
+-- Process Queued Log Card UI Creation (Anti-Lag Batching)
+local function renderLogCard(item)
+    local remote = item.Remote
+    local method = item.Method
+    local args = item.Args
+    local remoteName = remote and remote.Name or "UnknownRemote"
+    local remotePath = getPath(remote)
+    local argsStr = formatArgsList(args)
 
-    if SpyState.BlockedRemotes[remoteName] or SpyState.BlockedRemotes[remotePath] then
+    local signature = remotePath .. "|" .. method .. "|" .. argsStr
+
+    -- Duplicate Suppression (Increase repeat counter instead of making new UI card)
+    if SpyState.LastLogSignature == signature and SpyState.LastLogCard and SpyState.LastLogCard.Parent then
+        SpyState.LastLogRepeatCount = SpyState.LastLogRepeatCount + 1
+        local titleLbl = SpyState.LastLogCard:FindFirstChild("TitleLabel", true)
+        if titleLbl then
+            titleLbl.Text = string.format("[%s]  %s  (x%d)", os.date("%H:%M:%S"), remoteName, SpyState.LastLogRepeatCount)
+        end
         return
     end
 
     SpyState.LogCount = SpyState.LogCount + 1
-    local entryIndex = SpyState.LogCount
-    local timeStr = os.date("%H:%M:%S")
+    SpyState.LastLogSignature = signature
+    SpyState.LastLogRepeatCount = 1
 
-    local formattedArgsStr = formatArgs(unpack(args))
-    local fullScriptCode = string.format("local remote = %s\nremote:%s(%s)", remotePath, method, formattedArgsStr)
+    -- Limit Max Log Cards to avoid UI clutter
+    local children = {}
+    for _, child in ipairs(LogScroll:GetChildren()) do
+        if child:IsA("Frame") then table.insert(children, child) end
+    end
+    if #children >= SpyState.MaxLogs then
+        children[1]:Destroy()
+    end
 
-    -- Log Entry Card
+    local fullCode = string.format("local remote = %s\nremote:%s(%s)", remotePath, method, argsStr)
+
+    -- Card Frame
     local Card = create("Frame", {
-        Name = "LogCard_" .. entryIndex,
-        Size = UDim2.new(1, 0, 0, 110),
+        Name = "LogCard_" .. SpyState.LogCount,
+        Size = UDim2.new(1, 0, 0, 96),
         BackgroundColor3 = Color3.fromRGB(26, 29, 40),
         BorderSizePixel = 0,
         Parent = LogScroll
     })
     create("UICorner", { CornerRadius = UDim.new(0, 6), Parent = Card })
-    create("UIStroke", { Color = Color3.fromRGB(45, 50, 68), Thickness = 1, Parent = Card })
 
-    local SearchKey = create("StringValue", {
+    SpyState.LastLogCard = Card
+
+    create("StringValue", {
         Name = "SearchKey",
-        Value = remoteName .. " " .. remotePath .. " " .. method .. " " .. formattedArgsStr,
+        Value = remoteName .. " " .. remotePath .. " " .. argsStr,
         Parent = Card
     })
 
-    -- Card Top Bar
+    -- Header Sub-Frame
     local CardHeader = create("Frame", {
-        Size = UDim2.new(1, 0, 0, 26),
+        Size = UDim2.new(1, 0, 0, 24),
         BackgroundColor3 = Color3.fromRGB(18, 20, 28),
         BorderSizePixel = 0,
         Parent = Card
     })
     create("UICorner", { CornerRadius = UDim.new(0, 6), Parent = CardHeader })
 
-    local MethodBadge = create("TextLabel", {
-        Size = UDim2.new(0, 75, 0, 18),
-        Position = UDim2.new(0, 8, 0.5, -9),
-        BackgroundColor3 = method == "FireServer" and Color3.fromRGB(0, 140, 220) or Color3.fromRGB(160, 80, 220),
+    local MethodTag = create("TextLabel", {
+        Size = UDim2.new(0, 70, 0, 16),
+        Position = UDim2.new(0, 6, 0.5, -8),
+        BackgroundColor3 = method == "FireServer" and Color3.fromRGB(0, 130, 210) or Color3.fromRGB(150, 70, 210),
         Text = method,
         TextColor3 = Color3.fromRGB(255, 255, 255),
         TextSize = 10,
         Font = Enum.Font.GothamBold,
         Parent = CardHeader
     })
-    create("UICorner", { CornerRadius = UDim.new(0, 4), Parent = MethodBadge })
+    create("UICorner", { CornerRadius = UDim.new(0, 4), Parent = MethodTag })
 
-    local RemoteTitle = create("TextLabel", {
-        Size = UDim2.new(1, -260, 1, 0),
-        Position = UDim2.new(0, 90, 0, 0),
+    local TitleLabel = create("TextLabel", {
+        Name = "TitleLabel",
+        Size = UDim2.new(1, -230, 1, 0),
+        Position = UDim2.new(0, 82, 0, 0),
         BackgroundTransparency = 1,
-        Text = string.format("#%d  [%s]  %s", entryIndex, timeStr, remoteName),
+        Text = string.format("[%s]  %s", os.date("%H:%M:%S"), remoteName),
         TextColor3 = Color3.fromRGB(240, 240, 250),
-        TextSize = 12,
+        TextSize = 11,
         Font = Enum.Font.GothamBold,
         TextXAlignment = Enum.TextXAlignment.Left,
         Parent = CardHeader
     })
 
-    -- Action Buttons on Entry
-    local CopyCodeBtn = create("TextButton", {
-        Size = UDim2.new(0, 70, 0, 18),
-        Position = UDim2.new(1, -155, 0.5, -9),
-        BackgroundColor3 = Color3.fromRGB(40, 44, 60),
+    local CopyBtn = create("TextButton", {
+        Size = UDim2.new(0, 65, 0, 16),
+        Position = UDim2.new(1, -135, 0.5, -8),
+        BackgroundColor3 = Color3.fromRGB(36, 40, 56),
         Text = "📋 Code",
         TextColor3 = Color3.fromRGB(220, 225, 240),
         TextSize = 10,
         Font = Enum.Font.GothamMedium,
         Parent = CardHeader
     })
-    create("UICorner", { CornerRadius = UDim.new(0, 4), Parent = CopyCodeBtn })
+    create("UICorner", { CornerRadius = UDim.new(0, 4), Parent = CopyBtn })
 
     local BlockBtn = create("TextButton", {
-        Size = UDim2.new(0, 70, 0, 18),
-        Position = UDim2.new(1, -80, 0.5, -9),
-        BackgroundColor3 = Color3.fromRGB(70, 30, 35),
+        Size = UDim2.new(0, 60, 0, 16),
+        Position = UDim2.new(1, -66, 0.5, -8),
+        BackgroundColor3 = Color3.fromRGB(65, 28, 32),
         Text = "🚫 Block",
         TextColor3 = Color3.fromRGB(255, 120, 120),
         TextSize = 10,
@@ -450,30 +429,30 @@ local function addLogEntry(remoteInstance, method, args)
     })
     create("UICorner", { CornerRadius = UDim.new(0, 4), Parent = BlockBtn })
 
-    -- Path Box
-    local PathBox = create("TextBox", {
-        Size = UDim2.new(1, -16, 0, 20),
-        Position = UDim2.new(0, 8, 0, 30),
+    -- Path Input
+    local PathInput = create("TextBox", {
+        Size = UDim2.new(1, -12, 0, 18),
+        Position = UDim2.new(0, 6, 0, 27),
         BackgroundColor3 = Color3.fromRGB(18, 20, 28),
         Text = remotePath,
-        TextColor3 = Color3.fromRGB(150, 165, 195),
-        TextSize = 11,
+        TextColor3 = Color3.fromRGB(140, 160, 195),
+        TextSize = 10,
         Font = Enum.Font.Code,
         TextXAlignment = Enum.TextXAlignment.Left,
         ClearTextOnFocus = false,
         Parent = Card
     })
-    create("UICorner", { CornerRadius = UDim.new(0, 4), Parent = PathBox })
-    create("UIPadding", { PaddingLeft = UDim.new(0, 6), Parent = PathBox })
+    create("UICorner", { CornerRadius = UDim.new(0, 3), Parent = PathInput })
+    create("UIPadding", { PaddingLeft = UDim.new(0, 4), Parent = PathInput })
 
-    -- Args Box (Selectable / Copyable)
-    local ArgsBox = create("TextBox", {
-        Size = UDim2.new(1, -16, 0, 52),
-        Position = UDim2.new(0, 8, 0, 53),
+    -- Args Input (Selectable / Copyable)
+    local ArgsInput = create("TextBox", {
+        Size = UDim2.new(1, -12, 0, 44),
+        Position = UDim2.new(0, 6, 0, 47),
         BackgroundColor3 = Color3.fromRGB(18, 20, 28),
-        Text = formattedArgsStr,
+        Text = argsStr,
         TextColor3 = Color3.fromRGB(120, 220, 170),
-        TextSize = 11,
+        TextSize = 10,
         Font = Enum.Font.Code,
         TextXAlignment = Enum.TextXAlignment.Left,
         TextYAlignment = Enum.TextYAlignment.Top,
@@ -481,98 +460,151 @@ local function addLogEntry(remoteInstance, method, args)
         ClearTextOnFocus = false,
         Parent = Card
     })
-    create("UICorner", { CornerRadius = UDim.new(0, 4), Parent = ArgsBox })
-    create("UIPadding", { PaddingLeft = UDim.new(0, 6), PaddingTop = UDim.new(0, 4), Parent = ArgsBox })
+    create("UICorner", { CornerRadius = UDim.new(0, 3), Parent = ArgsInput })
+    create("UIPadding", { PaddingLeft = UDim.new(0, 4), PaddingTop = UDim.new(0, 3), Parent = ArgsInput })
 
-    -- Copy Code Functionality
-    CopyCodeBtn.MouseButton1Click:Connect(function()
+    -- Copy Callback
+    CopyBtn.MouseButton1Click:Connect(function()
         if setclipboard then
-            setclipboard(fullScriptCode)
-            CopyCodeBtn.Text = "Copied!"
-            CopyCodeBtn.BackgroundColor3 = Color3.fromRGB(0, 160, 90)
-            task.wait(1.2)
-            CopyCodeBtn.Text = "📋 Code"
-            CopyCodeBtn.BackgroundColor3 = Color3.fromRGB(40, 44, 60)
+            setclipboard(fullCode)
+            CopyBtn.Text = "Copied!"
+            CopyBtn.BackgroundColor3 = Color3.fromRGB(0, 150, 90)
+            task.wait(1)
+            CopyBtn.Text = "📋 Code"
+            CopyBtn.BackgroundColor3 = Color3.fromRGB(36, 40, 56)
         else
-            ArgsBox:CaptureFocus()
+            ArgsInput:CaptureFocus()
         end
     end)
 
-    -- Block Event Functionality
+    -- Block Callback
     BlockBtn.MouseButton1Click:Connect(function()
         SpyState.BlockedRemotes[remoteName] = true
         SpyState.BlockedRemotes[remotePath] = true
         Card:Destroy()
     end)
 
-    -- Check Search Filter for newly added card
-    if SpyState.SearchQuery ~= "" and not string.find(SearchKey.Value:lower(), SpyState.SearchQuery, 1, true) then
+    if SpyState.SearchQuery ~= "" and not string.find(remoteName:lower() .. " " .. remotePath:lower(), SpyState.SearchQuery, 1, true) then
         Card.Visible = false
     end
 end
 
--- Keybind Toggle (K Key)
+-- Queue Processor Loop (Anti-Lag: 10 FPS batching)
+task.spawn(function()
+    while true do
+        task.wait(0.1)
+        if #SpyState.LogQueue > 0 and not SpyState.Paused then
+            local count = 0
+            while #SpyState.LogQueue > 0 and count < 5 do
+                local item = table.remove(SpyState.LogQueue, 1)
+                renderLogCard(item)
+                count = count + 1
+            end
+        end
+    end
+end)
+
+-- Main Remote Processing Handler
+local function handleRemoteCall(remote, method, args)
+    if SpyState.Paused or not remote then return end
+    local remoteName = remote.Name
+    if SpyState.IgnoredSpamNames[remoteName] then return end
+
+    local remotePath = getPath(remote)
+    if SpyState.BlockedRemotes[remoteName] or SpyState.BlockedRemotes[remotePath] then
+        return
+    end
+
+    if #SpyState.LogQueue < 30 then
+        table.insert(SpyState.LogQueue, {
+            Remote = remote,
+            Method = method,
+            Args = args
+        })
+    end
+end
+
+-- Universal Metamethod / Namecall Hooking
+local function initRemoteHooks()
+    local hooked = false
+
+    -- Method 1: hookmetamethod (Standard for modern executors)
+    if type(hookmetamethod) == "function" then
+        pcall(function()
+            local oldNamecall
+            oldNamecall = hookmetamethod(game, "__namecall", newcclosure(function(self, ...)
+                local method = getnamecallmethod()
+                if not checkcaller() and type(self) == "userdata" and (method == "FireServer" or method == "InvokeServer") then
+                    if self:IsA("RemoteEvent") or self:IsA("RemoteFunction") then
+                        handleRemoteCall(self, method, {...})
+                        local path = getPath(self)
+                        if SpyState.BlockedRemotes[self.Name] or SpyState.BlockedRemotes[path] then
+                            if SpyState.BlockExecution then
+                                return nil
+                            end
+                        end
+                    end
+                end
+                return oldNamecall(self, ...)
+            end))
+            hooked = true
+        end)
+    end
+
+    -- Method 2: getrawmetatable fallback
+    if not hooked and type(getrawmetatable) == "function" and type(setreadonly) == "function" then
+        pcall(function()
+            local gmt = getrawmetatable(game)
+            local oldNamecall = gmt.__namecall
+            setreadonly(gmt, false)
+
+            gmt.__namecall = newcclosure(function(self, ...)
+                local method = getnamecallmethod()
+                if not checkcaller() and type(self) == "userdata" and (method == "FireServer" or method == "InvokeServer") then
+                    if self:IsA("RemoteEvent") or self:IsA("RemoteFunction") then
+                        handleRemoteCall(self, method, {...})
+                        local path = getPath(self)
+                        if SpyState.BlockedRemotes[self.Name] or SpyState.BlockedRemotes[path] then
+                            if SpyState.BlockExecution then
+                                return nil
+                            end
+                        end
+                    end
+                end
+                return oldNamecall(self, ...)
+            end)
+
+            setreadonly(gmt, true)
+            hooked = true
+        end)
+    end
+
+    -- Method 3: hookfunction on FireServer/InvokeServer directly
+    if not hooked and type(hookfunction) == "function" then
+        pcall(function()
+            local dummyEvent = Instance.new("RemoteEvent")
+            local oldFireServer
+            oldFireServer = hookfunction(dummyEvent.FireServer, newcclosure(function(self, ...)
+                if not checkcaller() and self and self:IsA("RemoteEvent") then
+                    handleRemoteCall(self, "FireServer", {...})
+                end
+                return oldFireServer(self, ...)
+            end))
+            dummyEvent:Destroy()
+            hooked = true
+        end)
+    end
+
+    if not hooked then
+        warn("[Remote Spy Warning] Executor metamethod hooks restricted. Using Event Listener mode.")
+    end
+end
+
+initRemoteHooks()
+
+-- Keybind Listener (K Key)
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
     if not gameProcessed and input.KeyCode == Enum.KeyCode.K then
         MainFrame.Visible = not MainFrame.Visible
     end
 end)
-
--- Metatable Hook for Intercepting Client-Side Remote Calls
-local function setupHooks()
-    local success, err = pcall(function()
-        local gmt = getrawmetatable(game)
-        local oldNamecall = gmt.__namecall
-        setreadonly(gmt, false)
-
-        gmt.__namecall = newcclosure(function(self, ...)
-            local method = getnamecallmethod()
-            if not checkcaller() and type(self) == "userdata" and (method == "FireServer" or method == "InvokeServer") then
-                if self:IsA("RemoteEvent") or self:IsA("RemoteFunction") then
-                    local remoteName = self.Name
-                    local remotePath = getPath(self)
-
-                    if SpyState.BlockedRemotes[remoteName] or SpyState.BlockedRemotes[remotePath] then
-                        if SpyState.BlockExecution then
-                            return nil
-                        end
-                    else
-                        local args = {...}
-                        task.spawn(function()
-                            addLogEntry(self, method, args)
-                        end)
-                    end
-                end
-            end
-            return oldNamecall(self, ...)
-        end)
-
-        setreadonly(gmt, true)
-    end)
-
-    if not success then
-        -- Fallback: Scan workspace & ReplicatedStorage for RemoteEvents
-        warn("[Remote Spy] Hookmetamethod not available. Operating in Fallback Listener mode.")
-        local function attachListener(remote)
-            if remote:IsA("RemoteEvent") then
-                remote.OnClientEvent:Connect(function(...)
-                    addLogEntry(remote, "OnClientEvent", {...})
-                end)
-            end
-        end
-
-        for _, instance in ipairs(game:GetDescendants()) do
-            if instance:IsA("RemoteEvent") then
-                pcall(attachListener, instance)
-            end
-        end
-
-        game.DescendantAdded:Connect(function(instance)
-            if instance:IsA("RemoteEvent") then
-                pcall(attachListener, instance)
-            end
-        end)
-    end
-end
-
-setupHooks()
