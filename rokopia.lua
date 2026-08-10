@@ -3,8 +3,8 @@
     Features: 
       - Troll Tab: Progressive Shaft & Expand Hole (1x1 Shaft -> 3x3 Expand -> 5x5 Expand -> TP to Next Hole)
       - Multi-Hit Block Breaking (Repeats hits up to Block Durability, e.g. 7 hits for stone)
+      - Lowest Cooldown Support (10ms minimum delay)
       - Auto Teleport & Anchor above hole center to prevent falling
-      - Anti-Cheat Safe: 1 block per call, 200ms safe cooldown, distance <= 20 studs
     Powered by Custom UI Framework (lib.lua)
 ]]
 
@@ -37,7 +37,7 @@ local Config = {
     HoleRadius = 15,
     HoleDepth = 15,
     HitsPerBlock = 7, -- Repeat hits per block for durability (Dirt=4, Stone=7, Altar=14)
-    CooldownSpeed = 0.20 -- 200ms ultra-safe delay above server 0.1s ACTION_COOLDOWN
+    CooldownSpeed = 0.01 -- 10ms lowest delay
 }
 
 -- Fetch BreakBlock Remote Function
@@ -75,7 +75,7 @@ local function breakSingleBlock(targetX, y, targetZ)
         -- Send 1 damage hit (SELECTION_MAX_BLOCKS = 1)
         local res = breakRemote:InvokeServer({ key })
 
-        -- Wait safe cooldown between hits (200ms)
+        -- Wait cooldown between hits (10ms)
         task.wait(Config.CooldownSpeed)
 
         -- If server returns false (block fully broken / non-existent / empty), stop hitting this block
@@ -95,7 +95,7 @@ local function positionAndAnchorPlayer(centerX, startY, centerZ)
         local targetWorldPos = Vector3.new(centerX * 4.2, (startY + 2) * 4.2, centerZ * 4.2)
         hrp.CFrame = CFrame.new(targetWorldPos)
         hrp.Anchored = true
-        task.wait(0.1)
+        task.wait(0.05)
     end
 end
 
@@ -113,7 +113,7 @@ end
 -- --------------------------------------------------------------------
 task.spawn(function()
     while true do
-        task.wait(0.1)
+        task.wait(0.05)
         if Config.RandomHoles then
             pcall(function()
                 local char = LocalPlayer.Character
@@ -181,7 +181,7 @@ task.spawn(function()
 
                 -- Unanchor after finishing one hole location
                 unanchorPlayer()
-                task.wait(0.2)
+                task.wait(0.1)
             end)
         else
             unanchorPlayer()
@@ -196,11 +196,15 @@ end)
 trollTab:CreateToggleSwitch("Build Random Holes", false, function(val)
     Config.RandomHoles = val
     if val then
-        lib:Notify("Rokopia Troll", "Progressive Multi-Hit Digger Active!", 2.0)
+        lib:Notify("Rokopia Troll", "Fast Progressive Digger Active (10ms Cooldown)!", 2.0)
     else
         unanchorPlayer()
         lib:Notify("Rokopia Troll", "Build Random Holes Stopped.", 1.5)
     end
+end)
+
+trollTab:CreateSlider("Cooldown Delay (ms)", 10, 400, 10, function(val)
+    Config.CooldownSpeed = val / 1000
 end)
 
 trollTab:CreateSlider("Max Hits Per Block", 1, 14, 7, function(val)
@@ -213,10 +217,6 @@ end)
 
 trollTab:CreateSlider("Hole Depth (Blocks)", 5, 25, 12, function(val)
     Config.HoleDepth = val
-end)
-
-trollTab:CreateSlider("Cooldown Delay (ms)", 150, 400, 200, function(val)
-    Config.CooldownSpeed = val / 1000
 end)
 
 
@@ -235,4 +235,4 @@ settingsTab:CreateSlider("Window Transparency", 0, 90, 25, function(val)
     int:SetTransparency(val / 100)
 end)
 
-print("[Rokopia Suite] Multi-Hit Durability Support Added!")
+print("[Rokopia Suite] 10ms Lowest Cooldown Enabled!")
