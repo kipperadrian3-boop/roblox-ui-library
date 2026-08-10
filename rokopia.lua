@@ -1,10 +1,11 @@
 --[[
     Rokopia - Custom Script Suite (rokopia.lua)
     Features: 
-      - Troll Tab: Perfect 5x5 Void Hole Digger (Clears 5x5 area from top Y down to bedrock/void Y = -64)
-      - Character TP directly above targeted block for 100% hit accuracy and zero distance kicks
-      - Options for 1x1, 3x3, and 5x5 Void Holes
-      - Player Tab: WalkSpeed (0-500), JumpPower (0-500), Fly (0-300), Noclip
+      - Smart Hole Digger: Scans under current position to find existing surface blocks
+      - Smart Break: Hops & breaks ONLY existing blocks (never tries to break empty air/void)
+      - Standard Theme: Cyber (Neon Blue) set by default
+      - Hole Matrix Sizes: 1x1, 3x3, 5x5
+      - Player Tab: WalkSpeed, JumpPower, Fly & Noclip
     Powered by Custom UI Framework (lib.lua)
 ]]
 
@@ -28,9 +29,10 @@ if not success or not lib or type(lib) ~= "table" then
     return
 end
 
-local int = lib:CreateInterface("Rokopia Suite", "Void Digger & Movement Suite", "", "bottom left", "royal", 0.25)
+-- Create Interface with Default Cyber (Blue) Theme
+local int = lib:CreateInterface("Rokopia Suite", "Smart Hole Digger & Movement Suite", "", "bottom left", "cyber", 0.25)
 
-local trollTab = int:CreateTab("Troll", "Void Digger & Pitfalls", "item", true)
+local trollTab = int:CreateTab("Troll", "Smart Hole Digger", "item", true)
 local playerTab = int:CreateTab("Player", "Movement & Speed Controls", "player")
 local settingsTab = int:CreateTab("Settings", "UI Customization", "misc")
 
@@ -39,7 +41,8 @@ local Config = {
     RandomHoles = false,
     HoleSize = 2, -- 0 = 1x1, 1 = 3x3, 2 = 5x5
     HoleRadius = 20,
-    HitsPerBlock = 14, -- High hit count to guarantee 100% destruction of stone/altar stone
+    HoleDepth = 30,
+    HitsPerBlock = 14,
     CooldownSpeed = 0.01, -- 10ms delay
     WalkSpeed = 16,
     JumpPower = 50,
@@ -198,27 +201,32 @@ local function unanchorCharacter()
     end
 end
 
--- Safely break a block by teleporting character directly over it and hitting up to max durability
+-- Safely break a block by checking server response (only hits existing real blocks, never empty air)
 local function destroyTargetBlock(targetX, targetY, targetZ)
     if not Config.RandomHoles then return false end
 
     local breakRemote = getBreakBlockRemote()
     if not breakRemote then return false end
 
-    -- 1. Teleport player directly on top of the target block
-    positionCharacterForBlock(targetX, targetY, targetZ)
-
     local key = string.format("%d,%d,%d", targetX, targetY, targetZ)
 
-    -- 2. Repeatedly hit the block to guarantee complete removal down to void
-    for hit = 1, Config.HitsPerBlock do
+    -- First test hit to check if a block actually exists at key
+    positionCharacterForBlock(targetX, targetY, targetZ)
+    local initialRes = breakRemote:InvokeServer({ key })
+    task.wait(Config.CooldownSpeed)
+
+    -- If server returned false immediately, there is NO block here (empty air/void) -> skip!
+    if initialRes == false then
+        return false
+    end
+
+    -- Block exists! Complete destruction up to durability
+    for hit = 2, Config.HitsPerBlock do
         if not Config.RandomHoles then break end
 
-        -- Send 1 damage hit per call (SELECTION_MAX_BLOCKS = 1 for anti-cheat safety)
         local res = breakRemote:InvokeServer({ key })
         task.wait(Config.CooldownSpeed)
 
-        -- If server returned false (block fully removed / empty), stop hitting
         if res == false then
             break
         end
@@ -229,7 +237,7 @@ end
 
 
 -- --------------------------------------------------------------------
--- PERFECT VOID DIGGER ENGINE (Clears area layer-by-layer down to Y = -64)
+-- SMART HOLE DIGGER ENGINE (Scans ground, breaks ONLY real blocks)
 -- --------------------------------------------------------------------
 task.spawn(function()
     while true do
@@ -240,7 +248,7 @@ task.spawn(function()
                 local hrp = char and char:FindFirstChild("HumanoidRootPart")
                 if not hrp then return end
 
-                -- 1. Pick a random hole center point within search radius
+                -- 1. Pick target center within HoleRadius
                 local playerPos = hrp.Position
                 local pX = math.floor(playerPos.X / 4.2)
                 local pY = math.floor(playerPos.Y / 4.2)
@@ -252,13 +260,13 @@ task.spawn(function()
                 local centerX = pX + randOffsetX
                 local centerZ = pZ + randOffsetZ
 
-                -- Start digging from high Y (above houses/trees) down to Bedrock/Void (Y = -64)
-                local startY = math.min(pY + 6, 32)
-                local endY = -64
+                -- Scan downward from player height to find real blocks
+                local startY = pY + 2
+                local endY = math.max(pY - Config.HoleDepth, -40)
 
-                local halfSize = Config.HoleSize -- 0 for 1x1, 1 for 3x3, 2 for 5x5
+                local halfSize = Config.HoleSize -- 0 = 1x1, 1 = 3x3, 2 = 5x5
 
-                -- 2. Clear entire area layer-by-layer from top Y down to -64
+                -- 2. Clear ONLY real blocks layer-by-layer
                 for y = startY, endY, -1 do
                     if not Config.RandomHoles then break end
 
@@ -269,13 +277,13 @@ task.spawn(function()
                             local targetX = centerX + dx
                             local targetZ = centerZ + dz
 
-                            -- Teleport character directly over block and break it completely
+                            -- Breaks ONLY if a real block is present (skips empty void)
                             destroyTargetBlock(targetX, y, targetZ)
                         end
                     end
                 end
 
-                -- Unanchor after finishing void hole
+                -- Unanchor after finishing hole
                 unanchorCharacter()
                 task.wait(0.2)
             end)
@@ -287,15 +295,15 @@ end)
 
 
 -- --------------------------------------------------------------------
--- UI TAB 1: TROLL CONTROLS (Void Digger)
+-- UI TAB 1: TROLL CONTROLS (Smart Hole Digger)
 -- --------------------------------------------------------------------
-trollTab:CreateToggleSwitch("Build Void Hole", false, function(val)
+trollTab:CreateToggleSwitch("Build Smart Hole", false, function(val)
     Config.RandomHoles = val
     if val then
-        lib:Notify("Rokopia Troll", "Void Digger Active! Digging down to Y = -64...", 2.0)
+        lib:Notify("Rokopia Troll", "Smart Digger Active! Breaking real ground blocks...", 2.0)
     else
         unanchorCharacter()
-        lib:Notify("Rokopia Troll", "Void Digger Stopped.", 1.5)
+        lib:Notify("Rokopia Troll", "Smart Digger Stopped.", 1.5)
     end
 end)
 
@@ -304,13 +312,17 @@ sizeDrop:AddButton("1x1 Single Shaft Hole", function()
     Config.HoleSize = 0
     lib:Notify("Hole Size", "Set to 1x1 Single Shaft", 1.5)
 end)
-sizeDrop:AddButton("3x3 Medium Void Hole", function()
+sizeDrop:AddButton("3x3 Medium Hole", function()
     Config.HoleSize = 1
     lib:Notify("Hole Size", "Set to 3x3 Medium Hole", 1.5)
 end)
-sizeDrop:AddButton("5x5 Large Void Hole", function()
+sizeDrop:AddButton("5x5 Large Hole", function()
     Config.HoleSize = 2
     lib:Notify("Hole Size", "Set to 5x5 Large Hole", 1.5)
+end)
+
+trollTab:CreateSlider("Hole Depth (Blocks)", 5, 40, 25, function(val)
+    Config.HoleDepth = val
 end)
 
 trollTab:CreateSlider("Cooldown Delay (ms)", 10, 200, 10, function(val)
@@ -382,7 +394,7 @@ end)
 -- UI TAB 3: UI SETTINGS & TRANSPARENCY
 -- --------------------------------------------------------------------
 local themeDrop = settingsTab:CreateDropDown("Select UI Theme", function() end)
-local themesList = {"royal", "cyber", "emerald", "dark", "midnight", "blood", "gold", "neon"}
+local themesList = {"cyber", "royal", "emerald", "dark", "midnight", "blood", "gold", "neon"}
 for _, themeName in ipairs(themesList) do
     themeDrop:AddButton("Theme: " .. themeName:upper(), function()
         int:SetTheme(themeName)
@@ -393,4 +405,4 @@ settingsTab:CreateSlider("Window Transparency", 0, 90, 25, function(val)
     int:SetTransparency(val / 100)
 end)
 
-print("[Rokopia Suite] Perfect Void Digger & Movement Suite Loaded!")
+print("[Rokopia Suite] Smart Digger & Blue Theme Loaded!")
