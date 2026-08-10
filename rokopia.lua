@@ -1,6 +1,7 @@
 --[[
     Rokopia - Custom Script Suite (rokopia.lua)
     Features: 
+      - Items Tab: Item Spawner (Spawns any item/block into player hand using EquipAdmin)
       - Troll Tab: Progressive Shaft & Expand Hole (1x1 Shaft -> 3x3 Expand -> 5x5 Expand -> TP to Next Hole)
       - Multi-Hit Block Breaking (Repeats hits up to Block Durability, e.g. 7 hits for stone)
       - Lowest Cooldown Support (10ms minimum delay)
@@ -18,7 +19,7 @@ local REPO_URL = "https://raw.githubusercontent.com/kipperadrian3-boop/roblox-ui
 
 -- Load UI Library Framework (lib.lua with cache buster)
 local success, lib = pcall(function()
-    return loadstring(game:HttpGet(REPO_URL .. "lib.lua?t=" .. os.time()))()
+    return loadstring(game:HttpGet(REPO_URL .. "lib.lua?v=" .. tostring(math.random(1, 9999999))))()
 end)
 
 if not success or not lib or type(lib) ~= "table" then
@@ -26,9 +27,10 @@ if not success or not lib or type(lib) ~= "table" then
     return
 end
 
-local int = lib:CreateInterface("Rokopia Suite", "Voxel World & Troll Utilities", "", "bottom left", "royal", 0.25)
+local int = lib:CreateInterface("Rokopia Suite", "Voxel World, Item Spawner & Troll Suite", "", "bottom left", "royal", 0.25)
 
-local trollTab = int:CreateTab("Troll", "Map Manipulation & Pitfalls", "item", true)
+local itemsTab = int:CreateTab("Items", "Item & Block Spawner Hub", "item", true)
+local trollTab = int:CreateTab("Troll", "Map Manipulation & Pitfalls", "item")
 local settingsTab = int:CreateTab("Settings", "UI Customization", "misc")
 
 -- Configuration State
@@ -40,7 +42,7 @@ local Config = {
     CooldownSpeed = 0.01 -- 10ms lowest delay
 }
 
--- Fetch BreakBlock Remote Function
+-- Fetch Remotes
 local function getBreakBlockRemote()
     local remoteFuncFolder = ReplicatedStorage:FindFirstChild("RemoteFunction")
     if remoteFuncFolder then
@@ -48,6 +50,27 @@ local function getBreakBlockRemote()
     end
     return nil
 end
+
+local function getEquipAdminRemote()
+    local remoteEventFolder = ReplicatedStorage:FindFirstChild("RemoteEvent")
+    local invFolder = remoteEventFolder and remoteEventFolder:FindFirstChild("Inventory")
+    if invFolder then
+        return invFolder:FindFirstChild("EquipAdmin")
+    end
+    return nil
+end
+
+-- Helper to Spawn Item into Hand
+local function spawnItemIntoHand(itemId)
+    local remote = getEquipAdminRemote()
+    if remote then
+        remote:FireServer(itemId)
+        lib:Notify("Item Spawner", "Spawned item: " .. tostring(itemId), 1.5)
+    else
+        lib:Notify("Item Error", "Could not find EquipAdmin remote!", 2.0)
+    end
+end
+
 
 -- Helper function to break a single block safely with anti-cheat checks & multi-hit durability support
 local function breakSingleBlock(targetX, y, targetZ)
@@ -191,7 +214,75 @@ end)
 
 
 -- --------------------------------------------------------------------
--- UI TAB 1: TROLL CONTROLS
+-- UI TAB 1: ITEM SPAWNER HUB
+-- --------------------------------------------------------------------
+itemsTab:CreateComment("--- Quick Item Spawner ---")
+
+local itemDropdown = itemsTab:CreateDropDown("Select Item To Spawn", function() end)
+
+local itemList = {
+    { name = "Grass Block", id = "block.grass" },
+    { name = "Dirt Block", id = "block.dirt" },
+    { name = "Stone Block", id = "block.stone" },
+    { name = "Altar Stone", id = "block.altar_stone" },
+    { name = "Wood Block", id = "block.wood" },
+    { name = "Water Source Block", id = "block.water_source" },
+    { name = "Wooden Chair", id = "furniture.seat.wooden_chair" },
+    { name = "Wooden Torch", id = "environment.light.floor_and_wall.wooden_torch" },
+    { name = "High Grass Bush", id = "plant.grass_bush.high" },
+    { name = "Low Grass Bush", id = "plant.grass_bush.low" },
+    { name = "Big Brown Mushroom", id = "mushroom.big_brown" },
+    { name = "Flat White Mushroom", id = "mushroom.flat_white" },
+    { name = "High Yellow Mushroom", id = "mushroom.high_yellow" },
+    { name = "Carrot", id = "plant.vegetable.carrot" },
+    { name = "Modern Battery Block", id = "electronic.battery.block_modern" },
+    { name = "Antique Battery Block", id = "electronic.battery.block_antique" },
+    { name = "Large Voltaic Pile", id = "electronic.battery.voltaic_pile_large" },
+    { name = "Small Voltaic Pile", id = "electronic.battery.voltaic_pile_small" },
+    { name = "Light Bulb", id = "electronic.light.bulb" }
+}
+
+for _, itemData in ipairs(itemList) do
+    itemDropdown:AddButton("Spawn " .. itemData.name, function()
+        spawnItemIntoHand(itemData.id)
+    end)
+end
+
+itemsTab:CreateComment("--- Popular Quick Buttons ---")
+
+itemsTab:CreateButton("Spawn Grass Block", function()
+    spawnItemIntoHand("block.grass")
+end)
+
+itemsTab:CreateButton("Spawn Stone Block", function()
+    spawnItemIntoHand("block.stone")
+end)
+
+itemsTab:CreateButton("Spawn Altar Stone", function()
+    spawnItemIntoHand("block.altar_stone")
+end)
+
+itemsTab:CreateButton("Spawn Water Source", function()
+    spawnItemIntoHand("block.water_source")
+end)
+
+itemsTab:CreateButton("Spawn Wooden Torch", function()
+    spawnItemIntoHand("environment.light.floor_and_wall.wooden_torch")
+end)
+
+itemsTab:CreateButton("Spawn Battery Block", function()
+    spawnItemIntoHand("electronic.battery.block_modern")
+end)
+
+itemsTab:CreateTextbox("Custom Item ID Spawner", "e.g. block.stone", "", function(customId)
+    if customId and customId ~= "" then
+        spawnItemIntoHand(customId)
+    end
+end)
+
+
+-- --------------------------------------------------------------------
+-- UI TAB 2: TROLL CONTROLS
 -- --------------------------------------------------------------------
 trollTab:CreateToggleSwitch("Build Random Holes", false, function(val)
     Config.RandomHoles = val
@@ -221,7 +312,7 @@ end)
 
 
 -- --------------------------------------------------------------------
--- UI TAB 2: UI SETTINGS & TRANSPARENCY
+-- UI TAB 3: UI SETTINGS & TRANSPARENCY
 -- --------------------------------------------------------------------
 local themeDrop = settingsTab:CreateDropDown("Select UI Theme", function() end)
 local themesList = {"royal", "cyber", "emerald", "dark", "midnight", "blood", "gold", "neon"}
@@ -235,4 +326,4 @@ settingsTab:CreateSlider("Window Transparency", 0, 90, 25, function(val)
     int:SetTransparency(val / 100)
 end)
 
-print("[Rokopia Suite] 10ms Lowest Cooldown Enabled!")
+print("[Rokopia Suite] Item Spawner Hub Loaded!")
