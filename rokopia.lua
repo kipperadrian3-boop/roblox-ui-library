@@ -2,6 +2,7 @@
     Rokopia - Custom Script Suite (rokopia.lua)
     Features: 
       - Troll Tab: Progressive Shaft & Expand Hole (1x1 Shaft -> 3x3 Expand -> 5x5 Expand -> TP to Next Hole)
+      - Multi-Hit Block Breaking (Repeats hits up to Block Durability, e.g. 7 hits for stone)
       - Auto Teleport & Anchor above hole center to prevent falling
       - Anti-Cheat Safe: 1 block per call, 200ms safe cooldown, distance <= 20 studs
     Powered by Custom UI Framework (lib.lua)
@@ -35,6 +36,7 @@ local Config = {
     RandomHoles = false,
     HoleRadius = 15,
     HoleDepth = 15,
+    HitsPerBlock = 7, -- Repeat hits per block for durability (Dirt=4, Stone=7, Altar=14)
     CooldownSpeed = 0.20 -- 200ms ultra-safe delay above server 0.1s ACTION_COOLDOWN
 }
 
@@ -47,7 +49,7 @@ local function getBreakBlockRemote()
     return nil
 end
 
--- Helper function to break a single block safely with anti-cheat checks
+-- Helper function to break a single block safely with anti-cheat checks & multi-hit durability support
 local function breakSingleBlock(targetX, y, targetZ)
     if not Config.RandomHoles then return false end
 
@@ -58,15 +60,31 @@ local function breakSingleBlock(targetX, y, targetZ)
     if not hrp or not breakRemote then return false end
 
     local blockWorldPos = Vector3.new(targetX * 4.2, y * 4.2, targetZ * 4.2)
-    local dist = (hrp.Position - blockWorldPos).Magnitude
+    local key = string.format("%d,%d,%d", targetX, y, targetZ)
 
-    if dist <= 20 then
-        local key = string.format("%d,%d,%d", targetX, y, targetZ)
-        breakRemote:InvokeServer({ key })
+    -- Repeat hits for multi-durability blocks (e.g., Grass=2, Dirt=4, Stone=7)
+    for hit = 1, Config.HitsPerBlock do
+        if not Config.RandomHoles then break end
+
+        local currentHrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+        if not currentHrp then break end
+
+        local dist = (currentHrp.Position - blockWorldPos).Magnitude
+        if dist > 20 then break end
+
+        -- Send 1 damage hit (SELECTION_MAX_BLOCKS = 1)
+        local res = breakRemote:InvokeServer({ key })
+
+        -- Wait safe cooldown between hits (200ms)
         task.wait(Config.CooldownSpeed)
-        return true
+
+        -- If server returns false (block fully broken / non-existent / empty), stop hitting this block
+        if res == false then
+            break
+        end
     end
-    return false
+
+    return true
 end
 
 -- Teleport & Anchor Player above center of hole
@@ -178,11 +196,15 @@ end)
 trollTab:CreateToggleSwitch("Build Random Holes", false, function(val)
     Config.RandomHoles = val
     if val then
-        lib:Notify("Rokopia Troll", "Progressive Hole Digger Active (1x1 -> 3x3 -> 5x5)!", 2.0)
+        lib:Notify("Rokopia Troll", "Progressive Multi-Hit Digger Active!", 2.0)
     else
         unanchorPlayer()
         lib:Notify("Rokopia Troll", "Build Random Holes Stopped.", 1.5)
     end
+end)
+
+trollTab:CreateSlider("Max Hits Per Block", 1, 14, 7, function(val)
+    Config.HitsPerBlock = val
 end)
 
 trollTab:CreateSlider("Hole Search Radius (Studs)", 5, 20, 15, function(val)
@@ -213,4 +235,4 @@ settingsTab:CreateSlider("Window Transparency", 0, 90, 25, function(val)
     int:SetTransparency(val / 100)
 end)
 
-print("[Rokopia Suite] Progressive 1x1 -> 3x3 -> 5x5 Digger Loaded!")
+print("[Rokopia Suite] Multi-Hit Durability Support Added!")
