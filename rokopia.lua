@@ -1,9 +1,8 @@
 --[[
     Rokopia - Custom Script Suite (rokopia.lua)
     Features: 
-      - Troll Tab: "Build Random Holes" (Picks existing visual blocks around player and digs shaft holes)
-      - Anti-Cheat Bypass: Uses Workspace raycast / part names ("Block_x,y,z") to only target existing blocks
-      - Strict Anti-Cheat Safe (Respects ACTION_COOLDOWN 0.12s, SELECTION_MAX_BLOCKS = 1, ACTION_MAX_DISTANCE = 22)
+      - Troll Tab: "Build Random Holes" (Picks random surface blocks and digs vertical shaft holes downwards)
+      - Anti-Cheat Safeguards: 1 block per call, 200ms safe cooldown, distance <= 20 studs
     Powered by Custom UI Framework (lib.lua)
 ]]
 
@@ -15,9 +14,9 @@ local LocalPlayer = Players.LocalPlayer
 
 local REPO_URL = "https://raw.githubusercontent.com/kipperadrian3-boop/roblox-ui-library/main/"
 
--- Load UI Library Framework (lib.lua)
+-- Load UI Library Framework (lib.lua with cache buster)
 local success, lib = pcall(function()
-    return loadstring(game:HttpGet(REPO_URL .. "lib.lua"))()
+    return loadstring(game:HttpGet(REPO_URL .. "lib.lua?t=" .. os.time()))()
 end)
 
 if not success or not lib or type(lib) ~= "table" then
@@ -35,7 +34,7 @@ local Config = {
     RandomHoles = false,
     HoleRadius = 15,
     HoleDepth = 15,
-    CooldownSpeed = 0.13 -- Safe delay above server's 0.1s ACTION_COOLDOWN
+    CooldownSpeed = 0.20 -- 200ms ultra-safe delay above server 0.1s ACTION_COOLDOWN
 }
 
 -- Fetch BreakBlock Remote Function
@@ -47,24 +46,8 @@ local function getBreakBlockRemote()
     return nil
 end
 
--- Find all existing Block parts around the player
-local function findNearbyBlocks(hrp, maxRadiusStuds)
-    local blocks = {}
-    local overlapParams = OverlapParams.new()
-    overlapParams.FilterType = Enum.RaycastFilterType.Include
-    overlapParams.FilterDescendantsInstances = { Workspace }
-
-    local parts = Workspace:GetPartBoundsInRadius(hrp.Position, maxRadiusStuds, overlapParams)
-    for _, part in ipairs(parts) do
-        if part:IsA("BasePart") and string.sub(part.Name, 1, 6) == "Block_" then
-            table.insert(blocks, part)
-        end
-    end
-    return blocks
-end
-
 -- --------------------------------------------------------------------
--- BUILD RANDOM HOLES LOOP (Anti-Cheat Safe: 1 Block per 0.13s)
+-- BUILD RANDOM HOLES LOOP (Anti-Cheat Safe: 1 Block per 200ms)
 -- --------------------------------------------------------------------
 task.spawn(function()
     while true do
@@ -78,25 +61,41 @@ task.spawn(function()
                 local breakRemote = getBreakBlockRemote()
                 if not breakRemote then return end
 
-                -- Max distance allowed by server is 22 studs (~5 blocks)
-                local maxStudDistance = math.min(Config.HoleRadius * 4.2, 21)
-                local nearbyBlocks = findNearbyBlocks(hrp, maxStudDistance)
+                -- Get player grid block coordinates
+                local playerPos = hrp.Position
+                local pX = math.floor(playerPos.X / 4.2)
+                local pY = math.floor(playerPos.Y / 4.2)
+                local pZ = math.floor(playerPos.Z / 4.2)
 
-                if #nearbyBlocks > 0 then
-                    -- Pick a random block from existing world blocks
-                    local randomBlockPart = nearbyBlocks[math.random(1, #nearbyBlocks)]
-                    local blockKey = string.sub(randomBlockPart.Name, 7)
+                -- Select random column within HoleRadius (Max distance 22 studs = ~4 blocks)
+                local maxRadiusBlocks = math.clamp(math.floor(Config.HoleRadius / 4.2), 1, 4)
+                local randOffsetX = math.random(-maxRadiusBlocks, maxRadiusBlocks)
+                local randOffsetZ = math.random(-maxRadiusBlocks, maxRadiusBlocks)
+                local targetX = pX + randOffsetX
+                local targetZ = pZ + randOffsetZ
 
-                    if blockKey and blockKey ~= "" then
-                        -- Double check distance to ensure zero kick risk
-                        local dist = (hrp.Position - randomBlockPart.Position).Magnitude
-                        if dist <= 21.5 then
-                            -- Send exactly 1 block key per request (SELECTION_MAX_BLOCKS = 1)
-                            breakRemote:InvokeServer({ blockKey })
-                            
-                            -- Enforce strict cooldown > ACTION_COOLDOWN (0.13s)
-                            task.wait(Config.CooldownSpeed)
-                        end
+                -- Dig vertically downwards from player level
+                local startY = pY + 1
+                local endY = math.max(pY - Config.HoleDepth, -64)
+
+                for y = startY, endY, -1 do
+                    if not Config.RandomHoles then break end
+
+                    -- Re-check distance to ensure no kick (ACTION_MAX_DISTANCE = 22 studs)
+                    local currentHrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+                    if not currentHrp then break end
+
+                    local blockWorldPos = Vector3.new(targetX * 4.2, y * 4.2, targetZ * 4.2)
+                    local dist = (currentHrp.Position - blockWorldPos).Magnitude
+
+                    if dist <= 20 then
+                        local key = string.format("%d,%d,%d", targetX, y, targetZ)
+                        
+                        -- Send EXACT 1 block per invocation (SELECTION_MAX_BLOCKS = 1)
+                        breakRemote:InvokeServer({ key })
+
+                        -- Wait safe 200ms cooldown (above server's 100ms ACTION_COOLDOWN)
+                        task.wait(Config.CooldownSpeed)
                     end
                 end
             end)
@@ -117,11 +116,15 @@ trollTab:CreateToggleSwitch("Build Random Holes", false, function(val)
     end
 end)
 
-trollTab:CreateSlider("Hole Radius (Blocks)", 1, 5, 4, function(val)
+trollTab:CreateSlider("Hole Radius (Studs)", 5, 20, 15, function(val)
     Config.HoleRadius = val
 end)
 
-trollTab:CreateSlider("Cooldown Delay (ms)", 120, 350, 130, function(val)
+trollTab:CreateSlider("Hole Depth (Blocks)", 5, 25, 12, function(val)
+    Config.HoleDepth = val
+end)
+
+trollTab:CreateSlider("Cooldown Delay (ms)", 150, 400, 200, function(val)
     Config.CooldownSpeed = val / 1000
 end)
 
@@ -141,4 +144,4 @@ settingsTab:CreateSlider("Window Transparency", 0, 90, 25, function(val)
     int:SetTransparency(val / 100)
 end)
 
-print("[Rokopia Suite] Updated with Part Bounds Block Key Detection!")
+print("[Rokopia Suite] Loaded with Cache Buster!")
