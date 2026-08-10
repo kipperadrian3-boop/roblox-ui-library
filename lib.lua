@@ -219,11 +219,20 @@ function Library:CreateInterface(titleText, descText, discordLink, position, the
         end
     end)
 
-    for _, child in ipairs(parentGui:GetChildren()) do
-        if child.Name == "AdminSuiteUI" then
-            child:Destroy()
+    -- Clean up ALL previous instances in both CoreGui and PlayerGui
+    pcall(function()
+        for _, child in ipairs(CoreGui:GetChildren()) do
+            if child.Name == "AdminSuiteUI" then child:Destroy() end
         end
-    end
+    end)
+    pcall(function()
+        local playerGui = Players.LocalPlayer and Players.LocalPlayer:FindFirstChild("PlayerGui")
+        if playerGui then
+            for _, child in ipairs(playerGui:GetChildren()) do
+                if child.Name == "AdminSuiteUI" then child:Destroy() end
+            end
+        end
+    end)
 
     local themeUpdaters = {}
     local toggleKey = Enum.KeyCode.K
