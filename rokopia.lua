@@ -1,11 +1,10 @@
 --[[
     Rokopia - Custom Script Suite (rokopia.lua)
     Features: 
-      - Smart Hole Digger: Scans under current position to find existing surface blocks
-      - Smart Break: Hops & breaks ONLY existing blocks (never tries to break empty air/void)
-      - Standard Theme: Cyber (Neon Blue) set by default
-      - Hole Matrix Sizes: 1x1, 3x3, 5x5
+      - Troll Tab: Smart Hole Digger (1x1, 3x3, 5x5)
       - Player Tab: WalkSpeed, JumpPower, Fly & Noclip
+      - Misc Tab: Break Block Cooldown Slider in English (Standard 10ms default)
+      - Settings Tab: UI Themes & Transparency
     Powered by Custom UI Framework (lib.lua)
 ]]
 
@@ -30,10 +29,11 @@ if not success or not lib or type(lib) ~= "table" then
 end
 
 -- Create Interface with Default Cyber (Blue) Theme
-local int = lib:CreateInterface("Rokopia Suite", "Smart Hole Digger & Movement Suite", "", "bottom left", "cyber", 0.25)
+local int = lib:CreateInterface("Rokopia Suite", "Smart Hole Digger & Misc Suite", "", "bottom left", "cyber", 0.25)
 
 local trollTab = int:CreateTab("Troll", "Smart Hole Digger", "item", true)
 local playerTab = int:CreateTab("Player", "Movement & Speed Controls", "player")
+local miscTab = int:CreateTab("Misc", "Game & Cooldown Utilities", "misc")
 local settingsTab = int:CreateTab("Settings", "UI Customization", "misc")
 
 -- Configuration State
@@ -43,7 +43,7 @@ local Config = {
     HoleRadius = 20,
     HoleDepth = 30,
     HitsPerBlock = 14,
-    CooldownSpeed = 0.01, -- 10ms delay
+    CooldownSpeed = 0.01, -- 10ms default delay (bypasses game standard cooldown)
     WalkSpeed = 16,
     JumpPower = 50,
     ModifySpeed = false,
@@ -325,10 +325,6 @@ trollTab:CreateSlider("Hole Depth (Blocks)", 5, 40, 25, function(val)
     Config.HoleDepth = val
 end)
 
-trollTab:CreateSlider("Cooldown Delay (ms)", 10, 200, 10, function(val)
-    Config.CooldownSpeed = val / 1000
-end)
-
 trollTab:CreateSlider("Max Hits Per Block", 1, 14, 14, function(val)
     Config.HitsPerBlock = val
 end)
@@ -343,7 +339,7 @@ end)
 -- --------------------------------------------------------------------
 playerTab:CreateToggleSwitch("Enable Fly", false, function(val)
     Config.Flying = val
-    if val then
+    if val me
         startFly()
         lib:Notify("Player", "Fly Activated! WASD + Space/Shift", 2)
     else
@@ -391,7 +387,22 @@ end)
 
 
 -- --------------------------------------------------------------------
--- UI TAB 3: UI SETTINGS & TRANSPARENCY
+-- UI TAB 3: MISC CONTROLS (Break Cooldown Speed)
+-- --------------------------------------------------------------------
+miscTab:CreateComment("--- Mining & Break Speed Utilities ---")
+
+miscTab:CreateSlider("Break Block Cooldown Speed (ms)", 10, 400, 10, function(val)
+    Config.CooldownSpeed = val / 1000
+    lib:Notify("Misc Cooldown", "Break Speed set to " .. tostring(val) .. " ms!", 1.5)
+end)
+
+miscTab:CreateSlider("Max Hits Per Block (Durability)", 1, 14, 14, function(val)
+    Config.HitsPerBlock = val
+end)
+
+
+-- --------------------------------------------------------------------
+-- UI TAB 4: UI SETTINGS & TRANSPARENCY
 -- --------------------------------------------------------------------
 local themeDrop = settingsTab:CreateDropDown("Select UI Theme", function() end)
 local themesList = {"cyber", "royal", "emerald", "dark", "midnight", "blood", "gold", "neon"}
@@ -405,4 +416,4 @@ settingsTab:CreateSlider("Window Transparency", 0, 90, 25, function(val)
     int:SetTransparency(val / 100)
 end)
 
-print("[Rokopia Suite] Smart Digger & Blue Theme Loaded!")
+print("[Rokopia Suite] Misc Tab & English Cooldown Slider Loaded!")
