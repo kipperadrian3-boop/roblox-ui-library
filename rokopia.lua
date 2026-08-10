@@ -1,10 +1,10 @@
 --[[
     Rokopia - Custom Script Suite (rokopia.lua)
     Features: 
-      - Troll Tab: Smart Hole Digger (1x1, 3x3, 5x5)
+      - Troll Tab: Simple Random Block Destroyer (Picks random real blocks in world, TPs avatar over it, breaks it completely)
       - Player Tab: WalkSpeed, JumpPower, Fly & Noclip
-      - Misc Tab: Break Block Cooldown Slider in English (Standard 10ms default)
-      - Settings Tab: UI Themes & Transparency
+      - Misc Tab: Break Block Cooldown Speed Slider (English, default 10ms)
+      - Settings Tab: UI Themes & Transparency (Default Cyber Blue)
     Powered by Custom UI Framework (lib.lua)
 ]]
 
@@ -29,9 +29,9 @@ if not success or not lib or type(lib) ~= "table" then
 end
 
 -- Create Interface with Default Cyber (Blue) Theme
-local int = lib:CreateInterface("Rokopia Suite", "Smart Hole Digger & Misc Suite", "", "bottom left", "cyber", 0.25)
+local int = lib:CreateInterface("Rokopia Suite", "Random Block Destroyer & Misc Suite", "", "bottom left", "cyber", 0.25)
 
-local trollTab = int:CreateTab("Troll", "Smart Hole Digger", "item", true)
+local trollTab = int:CreateTab("Troll", "Random Block Destroyer", "item", true)
 local playerTab = int:CreateTab("Player", "Movement & Speed Controls", "player")
 local miscTab = int:CreateTab("Misc", "Game & Cooldown Utilities", "misc")
 local settingsTab = int:CreateTab("Settings", "UI Customization", "misc")
@@ -39,11 +39,9 @@ local settingsTab = int:CreateTab("Settings", "UI Customization", "misc")
 -- Configuration State
 local Config = {
     RandomHoles = false,
-    HoleSize = 2, -- 0 = 1x1, 1 = 3x3, 2 = 5x5
-    HoleRadius = 20,
-    HoleDepth = 30,
+    HoleRadius = 25,
     HitsPerBlock = 14,
-    CooldownSpeed = 0.01, -- 10ms default delay (bypasses game standard cooldown)
+    CooldownSpeed = 0.01, -- 10ms default delay
     WalkSpeed = 16,
     JumpPower = 50,
     ModifySpeed = false,
@@ -201,7 +199,7 @@ local function unanchorCharacter()
     end
 end
 
--- Safely break a block by checking server response (only hits existing real blocks, never empty air)
+-- Break a real targeted block completely (skips empty air/void)
 local function destroyTargetBlock(targetX, targetY, targetZ)
     if not Config.RandomHoles then return false end
 
@@ -210,17 +208,17 @@ local function destroyTargetBlock(targetX, targetY, targetZ)
 
     local key = string.format("%d,%d,%d", targetX, targetY, targetZ)
 
-    -- First test hit to check if a block actually exists at key
+    -- Test hit to check if a block exists at key
     positionCharacterForBlock(targetX, targetY, targetZ)
     local initialRes = breakRemote:InvokeServer({ key })
     task.wait(Config.CooldownSpeed)
 
-    -- If server returned false immediately, there is NO block here (empty air/void) -> skip!
+    -- If server returns false immediately, no block exists here -> return false
     if initialRes == false then
         return false
     end
 
-    -- Block exists! Complete destruction up to durability
+    -- Block exists! Hit repeatedly until destroyed completely
     for hit = 2, Config.HitsPerBlock do
         if not Config.RandomHoles then break end
 
@@ -237,55 +235,38 @@ end
 
 
 -- --------------------------------------------------------------------
--- SMART HOLE DIGGER ENGINE (Scans ground, breaks ONLY real blocks)
+-- SIMPLE RANDOM BLOCK DESTROYER LOOP
 -- --------------------------------------------------------------------
 task.spawn(function()
     while true do
-        task.wait(0.1)
+        task.wait(0.05)
         if Config.RandomHoles then
             pcall(function()
                 local char = LocalPlayer.Character
                 local hrp = char and char:FindFirstChild("HumanoidRootPart")
                 if not hrp then return end
 
-                -- 1. Pick target center within HoleRadius
                 local playerPos = hrp.Position
                 local pX = math.floor(playerPos.X / 4.2)
                 local pY = math.floor(playerPos.Y / 4.2)
                 local pZ = math.floor(playerPos.Z / 4.2)
 
-                local maxRadiusBlocks = math.clamp(math.floor(Config.HoleRadius / 4.2), 1, 5)
-                local randOffsetX = math.random(-maxRadiusBlocks, maxRadiusBlocks)
-                local randOffsetZ = math.random(-maxRadiusBlocks, maxRadiusBlocks)
-                local centerX = pX + randOffsetX
-                local centerZ = pZ + randOffsetZ
+                local maxRadiusBlocks = math.clamp(math.floor(Config.HoleRadius / 4.2), 1, 10)
+                local randX = pX + math.random(-maxRadiusBlocks, maxRadiusBlocks)
+                local randZ = pZ + math.random(-maxRadiusBlocks, maxRadiusBlocks)
 
-                -- Scan downward from player height to find real blocks
-                local startY = pY + 2
-                local endY = math.max(pY - Config.HoleDepth, -40)
-
-                local halfSize = Config.HoleSize -- 0 = 1x1, 1 = 3x3, 2 = 5x5
-
-                -- 2. Clear ONLY real blocks layer-by-layer
-                for y = startY, endY, -1 do
+                -- Scan downward from player height to find a real block in world
+                for y = pY + 4, pY - 25, -1 do
                     if not Config.RandomHoles then break end
 
-                    for dx = -halfSize, halfSize do
-                        for dz = -halfSize, halfSize do
-                            if not Config.RandomHoles then break end
-
-                            local targetX = centerX + dx
-                            local targetZ = centerZ + dz
-
-                            -- Breaks ONLY if a real block is present (skips empty void)
-                            destroyTargetBlock(targetX, y, targetZ)
-                        end
+                    -- If a real block was found and completely broken, stop scanning and pick a new random spot!
+                    if destroyTargetBlock(randX, y, randZ) then
+                        break
                     end
                 end
 
-                -- Unanchor after finishing hole
                 unanchorCharacter()
-                task.wait(0.2)
+                task.wait(0.05)
             end)
         else
             unanchorCharacter()
@@ -295,42 +276,24 @@ end)
 
 
 -- --------------------------------------------------------------------
--- UI TAB 1: TROLL CONTROLS (Smart Hole Digger)
+-- UI TAB 1: TROLL CONTROLS (Random Block Destroyer)
 -- --------------------------------------------------------------------
-trollTab:CreateToggleSwitch("Build Smart Hole", false, function(val)
+trollTab:CreateToggleSwitch("Break Random Blocks", false, function(val)
     Config.RandomHoles = val
     if val then
-        lib:Notify("Rokopia Troll", "Smart Digger Active! Breaking real ground blocks...", 2.0)
+        lib:Notify("Rokopia Troll", "Random Block Destroyer Active! Finding & breaking blocks...", 2.0)
     else
         unanchorCharacter()
-        lib:Notify("Rokopia Troll", "Smart Digger Stopped.", 1.5)
+        lib:Notify("Rokopia Troll", "Random Block Destroyer Stopped.", 1.5)
     end
 end)
 
-local sizeDrop = trollTab:CreateDropDown("Hole Matrix Size", function() end)
-sizeDrop:AddButton("1x1 Single Shaft Hole", function()
-    Config.HoleSize = 0
-    lib:Notify("Hole Size", "Set to 1x1 Single Shaft", 1.5)
-end)
-sizeDrop:AddButton("3x3 Medium Hole", function()
-    Config.HoleSize = 1
-    lib:Notify("Hole Size", "Set to 3x3 Medium Hole", 1.5)
-end)
-sizeDrop:AddButton("5x5 Large Hole", function()
-    Config.HoleSize = 2
-    lib:Notify("Hole Size", "Set to 5x5 Large Hole", 1.5)
-end)
-
-trollTab:CreateSlider("Hole Depth (Blocks)", 5, 40, 25, function(val)
-    Config.HoleDepth = val
+trollTab:CreateSlider("Search Radius (Studs)", 5, 40, 25, function(val)
+    Config.HoleRadius = val
 end)
 
 trollTab:CreateSlider("Max Hits Per Block", 1, 14, 14, function(val)
     Config.HitsPerBlock = val
-end)
-
-trollTab:CreateSlider("Search Radius (Studs)", 5, 30, 20, function(val)
-    Config.HoleRadius = val
 end)
 
 
@@ -339,7 +302,7 @@ end)
 -- --------------------------------------------------------------------
 playerTab:CreateToggleSwitch("Enable Fly", false, function(val)
     Config.Flying = val
-    if val me
+    if val then
         startFly()
         lib:Notify("Player", "Fly Activated! WASD + Space/Shift", 2)
     else
@@ -416,4 +379,4 @@ settingsTab:CreateSlider("Window Transparency", 0, 90, 25, function(val)
     int:SetTransparency(val / 100)
 end)
 
-print("[Rokopia Suite] Misc Tab & English Cooldown Slider Loaded!")
+print("[Rokopia Suite] Simple Random Block Destroyer Loaded!")
