@@ -1,9 +1,9 @@
 --[[
     Rokopia - Custom Script Suite (rokopia.lua)
     Features: 
-      - Troll Tab: "Build Random Holes" (Picks random surface blocks and digs vertical shaft holes downwards)
-      - Cooldown & Anti-Cheat Safe (Respects ACTION_COOLDOWN 0.11s, SELECTION_MAX_BLOCKS = 1, ACTION_MAX_DISTANCE = 22)
-      - Customizable Hole Radius & Depth Sliders
+      - Troll Tab: "Build Random Holes" (Picks existing visual blocks around player and digs shaft holes)
+      - Anti-Cheat Bypass: Uses Workspace raycast / part names ("Block_x,y,z") to only target existing blocks
+      - Strict Anti-Cheat Safe (Respects ACTION_COOLDOWN 0.12s, SELECTION_MAX_BLOCKS = 1, ACTION_MAX_DISTANCE = 22)
     Powered by Custom UI Framework (lib.lua)
 ]]
 
@@ -35,7 +35,7 @@ local Config = {
     RandomHoles = false,
     HoleRadius = 15,
     HoleDepth = 15,
-    CooldownSpeed = 0.12 -- Safe delay above server's 0.1s ACTION_COOLDOWN
+    CooldownSpeed = 0.13 -- Safe delay above server's 0.1s ACTION_COOLDOWN
 }
 
 -- Fetch BreakBlock Remote Function
@@ -47,12 +47,28 @@ local function getBreakBlockRemote()
     return nil
 end
 
+-- Find all existing Block parts around the player
+local function findNearbyBlocks(hrp, maxRadiusStuds)
+    local blocks = {}
+    local overlapParams = OverlapParams.new()
+    overlapParams.FilterType = Enum.RaycastFilterType.Include
+    overlapParams.FilterDescendantsInstances = { Workspace }
+
+    local parts = Workspace:GetPartBoundsInRadius(hrp.Position, maxRadiusStuds, overlapParams)
+    for _, part in ipairs(parts) do
+        if part:IsA("BasePart") and string.sub(part.Name, 1, 6) == "Block_" then
+            table.insert(blocks, part)
+        end
+    end
+    return blocks
+end
+
 -- --------------------------------------------------------------------
--- BUILD RANDOM HOLES LOOP (Anti-Cheat Safe: 1 Block per 0.12s)
+-- BUILD RANDOM HOLES LOOP (Anti-Cheat Safe: 1 Block per 0.13s)
 -- --------------------------------------------------------------------
 task.spawn(function()
     while true do
-        task.wait(0.05)
+        task.wait(0.1)
         if Config.RandomHoles then
             pcall(function()
                 local char = LocalPlayer.Character
@@ -62,41 +78,25 @@ task.spawn(function()
                 local breakRemote = getBreakBlockRemote()
                 if not breakRemote then return end
 
-                -- Get player block position
-                local playerPos = hrp.Position
-                local pX = math.floor(playerPos.X / 4.2)
-                local pY = math.floor(playerPos.Y / 4.2)
-                local pZ = math.floor(playerPos.Z / 4.2)
+                -- Max distance allowed by server is 22 studs (~5 blocks)
+                local maxStudDistance = math.min(Config.HoleRadius * 4.2, 21)
+                local nearbyBlocks = findNearbyBlocks(hrp, maxStudDistance)
 
-                -- Select random column within HoleRadius (Max distance 22 studs = ~5 blocks)
-                local maxRadiusBlocks = math.min(Config.HoleRadius, 5)
-                local randOffsetX = math.random(-maxRadiusBlocks, maxRadiusBlocks)
-                local randOffsetZ = math.random(-maxRadiusBlocks, maxRadiusBlocks)
-                local targetX = pX + randOffsetX
-                local targetZ = pZ + randOffsetZ
+                if #nearbyBlocks > 0 then
+                    -- Pick a random block from existing world blocks
+                    local randomBlockPart = nearbyBlocks[math.random(1, #nearbyBlocks)]
+                    local blockKey = string.sub(randomBlockPart.Name, 7)
 
-                -- Dig vertically downwards from player level
-                local startY = pY + 1
-                local endY = math.max(pY - Config.HoleDepth, -64)
-
-                for y = startY, endY, -1 do
-                    if not Config.RandomHoles then break end
-
-                    -- Re-check distance to ensure no kick (ACTION_MAX_DISTANCE = 22 studs)
-                    local currentHrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-                    if not currentHrp then break end
-
-                    local blockWorldPos = Vector3.new(targetX * 4.2, y * 4.2, targetZ * 4.2)
-                    local dist = (currentHrp.Position - blockWorldPos).Magnitude
-
-                    if dist <= 21 then
-                        local key = string.format("%d,%d,%d", targetX, y, targetZ)
-                        
-                        -- Send exact 1 block per invocation (SELECTION_MAX_BLOCKS = 1)
-                        breakRemote:InvokeServer({ key })
-
-                        -- Wait safe cooldown above ACTION_COOLDOWN (0.12s)
-                        task.wait(Config.CooldownSpeed)
+                    if blockKey and blockKey ~= "" then
+                        -- Double check distance to ensure zero kick risk
+                        local dist = (hrp.Position - randomBlockPart.Position).Magnitude
+                        if dist <= 21.5 then
+                            -- Send exactly 1 block key per request (SELECTION_MAX_BLOCKS = 1)
+                            breakRemote:InvokeServer({ blockKey })
+                            
+                            -- Enforce strict cooldown > ACTION_COOLDOWN (0.13s)
+                            task.wait(Config.CooldownSpeed)
+                        end
                     end
                 end
             end)
@@ -121,11 +121,7 @@ trollTab:CreateSlider("Hole Radius (Blocks)", 1, 5, 4, function(val)
     Config.HoleRadius = val
 end)
 
-trollTab:CreateSlider("Hole Depth (Blocks)", 5, 25, 12, function(val)
-    Config.HoleDepth = val
-end)
-
-trollTab:CreateSlider("Cooldown Delay (ms)", 110, 300, 120, function(val)
+trollTab:CreateSlider("Cooldown Delay (ms)", 120, 350, 130, function(val)
     Config.CooldownSpeed = val / 1000
 end)
 
@@ -145,4 +141,4 @@ settingsTab:CreateSlider("Window Transparency", 0, 90, 25, function(val)
     int:SetTransparency(val / 100)
 end)
 
-print("[Rokopia Suite] Anti-Cheat Protection Enabled!")
+print("[Rokopia Suite] Updated with Part Bounds Block Key Detection!")
