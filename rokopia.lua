@@ -1,8 +1,9 @@
 --[[
     Rokopia - Custom Script Suite (rokopia.lua)
     Features: 
-      - Troll Tab: "Build Random Holes" (Picks random surface blocks and digs vertical shaft holes downwards)
-      - Anti-Cheat Safeguards: 1 block per call, 200ms safe cooldown, distance <= 20 studs
+      - Troll Tab: Progressive Shaft & Expand Hole (1x1 Shaft -> 3x3 Expand -> 5x5 Expand -> TP to Next Hole)
+      - Auto Teleport & Anchor above hole center to prevent falling
+      - Anti-Cheat Safe: 1 block per call, 200ms safe cooldown, distance <= 20 studs
     Powered by Custom UI Framework (lib.lua)
 ]]
 
@@ -46,8 +47,51 @@ local function getBreakBlockRemote()
     return nil
 end
 
+-- Helper function to break a single block safely with anti-cheat checks
+local function breakSingleBlock(targetX, y, targetZ)
+    if not Config.RandomHoles then return false end
+
+    local char = LocalPlayer.Character
+    local hrp = char and char:FindFirstChild("HumanoidRootPart")
+    local breakRemote = getBreakBlockRemote()
+
+    if not hrp or not breakRemote then return false end
+
+    local blockWorldPos = Vector3.new(targetX * 4.2, y * 4.2, targetZ * 4.2)
+    local dist = (hrp.Position - blockWorldPos).Magnitude
+
+    if dist <= 20 then
+        local key = string.format("%d,%d,%d", targetX, y, targetZ)
+        breakRemote:InvokeServer({ key })
+        task.wait(Config.CooldownSpeed)
+        return true
+    end
+    return false
+end
+
+-- Teleport & Anchor Player above center of hole
+local function positionAndAnchorPlayer(centerX, startY, centerZ)
+    local char = LocalPlayer.Character
+    local hrp = char and char:FindFirstChild("HumanoidRootPart")
+    if hrp then
+        local targetWorldPos = Vector3.new(centerX * 4.2, (startY + 2) * 4.2, centerZ * 4.2)
+        hrp.CFrame = CFrame.new(targetWorldPos)
+        hrp.Anchored = true
+        task.wait(0.1)
+    end
+end
+
+-- Unanchor Player
+local function unanchorPlayer()
+    local char = LocalPlayer.Character
+    local hrp = char and char:FindFirstChild("HumanoidRootPart")
+    if hrp then
+        hrp.Anchored = false
+    end
+end
+
 -- --------------------------------------------------------------------
--- BUILD RANDOM HOLES LOOP (Anti-Cheat Safe: 1 Block per 200ms)
+-- PROGRESSIVE HOLE DIGGER (1x1 Shaft -> 3x3 Expand -> 5x5 Expand -> Next)
 -- --------------------------------------------------------------------
 task.spawn(function()
     while true do
@@ -58,47 +102,71 @@ task.spawn(function()
                 local hrp = char and char:FindFirstChild("HumanoidRootPart")
                 if not hrp then return end
 
-                local breakRemote = getBreakBlockRemote()
-                if not breakRemote then return end
-
-                -- Get player grid block coordinates
+                -- 1. Select random target center block within HoleRadius
                 local playerPos = hrp.Position
                 local pX = math.floor(playerPos.X / 4.2)
                 local pY = math.floor(playerPos.Y / 4.2)
                 local pZ = math.floor(playerPos.Z / 4.2)
 
-                -- Select random column within HoleRadius (Max distance 22 studs = ~4 blocks)
                 local maxRadiusBlocks = math.clamp(math.floor(Config.HoleRadius / 4.2), 1, 4)
                 local randOffsetX = math.random(-maxRadiusBlocks, maxRadiusBlocks)
                 local randOffsetZ = math.random(-maxRadiusBlocks, maxRadiusBlocks)
-                local targetX = pX + randOffsetX
-                local targetZ = pZ + randOffsetZ
+                local centerX = pX + randOffsetX
+                local centerZ = pZ + randOffsetZ
 
-                -- Dig vertically downwards from player level
                 local startY = pY + 1
                 local endY = math.max(pY - Config.HoleDepth, -64)
 
+                -- 2. Teleport & Anchor above target hole center
+                positionAndAnchorPlayer(centerX, startY, centerZ)
+
+                -- PHASE 1: Dig initial 1x1 vertical shaft downwards (Top to Bottom)
                 for y = startY, endY, -1 do
                     if not Config.RandomHoles then break end
+                    breakSingleBlock(centerX, y, centerZ)
+                end
 
-                    -- Re-check distance to ensure no kick (ACTION_MAX_DISTANCE = 22 studs)
-                    local currentHrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-                    if not currentHrp then break end
-
-                    local blockWorldPos = Vector3.new(targetX * 4.2, y * 4.2, targetZ * 4.2)
-                    local dist = (currentHrp.Position - blockWorldPos).Magnitude
-
-                    if dist <= 20 then
-                        local key = string.format("%d,%d,%d", targetX, y, targetZ)
-                        
-                        -- Send EXACT 1 block per invocation (SELECTION_MAX_BLOCKS = 1)
-                        breakRemote:InvokeServer({ key })
-
-                        -- Wait safe 200ms cooldown (above server's 100ms ACTION_COOLDOWN)
-                        task.wait(Config.CooldownSpeed)
+                -- PHASE 2: Expand to 3x3 around the shaft (dx, dz in -1..1, excluding 0,0)
+                if Config.RandomHoles then
+                    for dx = -1, 1 do
+                        for dz = -1, 1 do
+                            if not Config.RandomHoles then break end
+                            if not (dx == 0 and dz == 0) then
+                                local targetX = centerX + dx
+                                local targetZ = centerZ + dz
+                                for y = startY, endY, -1 do
+                                    if not Config.RandomHoles then break end
+                                    breakSingleBlock(targetX, y, targetZ)
+                                end
+                            end
+                        end
                     end
                 end
+
+                -- PHASE 3: Expand to 5x5 around the shaft (outer ring dx, dz in -2..2)
+                if Config.RandomHoles then
+                    for dx = -2, 2 do
+                        for dz = -2, 2 do
+                            if not Config.RandomHoles then break end
+                            -- Only dig the outer 5x5 ring (where abs(dx) == 2 or abs(dz) == 2)
+                            if math.abs(dx) == 2 or math.abs(dz) == 2 then
+                                local targetX = centerX + dx
+                                local targetZ = centerZ + dz
+                                for y = startY, endY, -1 do
+                                    if not Config.RandomHoles then break end
+                                    breakSingleBlock(targetX, y, targetZ)
+                                end
+                            end
+                        end
+                    end
+                end
+
+                -- Unanchor after finishing one hole location
+                unanchorPlayer()
+                task.wait(0.2)
             end)
+        else
+            unanchorPlayer()
         end
     end
 end)
@@ -110,13 +178,14 @@ end)
 trollTab:CreateToggleSwitch("Build Random Holes", false, function(val)
     Config.RandomHoles = val
     if val then
-        lib:Notify("Rokopia Troll", "Build Random Holes Active (Anti-Cheat Safe)!", 1.5)
+        lib:Notify("Rokopia Troll", "Progressive Hole Digger Active (1x1 -> 3x3 -> 5x5)!", 2.0)
     else
+        unanchorPlayer()
         lib:Notify("Rokopia Troll", "Build Random Holes Stopped.", 1.5)
     end
 end)
 
-trollTab:CreateSlider("Hole Radius (Studs)", 5, 20, 15, function(val)
+trollTab:CreateSlider("Hole Search Radius (Studs)", 5, 20, 15, function(val)
     Config.HoleRadius = val
 end)
 
@@ -144,4 +213,4 @@ settingsTab:CreateSlider("Window Transparency", 0, 90, 25, function(val)
     int:SetTransparency(val / 100)
 end)
 
-print("[Rokopia Suite] Loaded with Cache Buster!")
+print("[Rokopia Suite] Progressive 1x1 -> 3x3 -> 5x5 Digger Loaded!")
