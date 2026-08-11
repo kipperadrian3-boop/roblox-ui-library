@@ -1,11 +1,10 @@
 --[[
-    Animatronic Nights - Universal Item & Fuse ESP Suite (animatronic_nights.lua)
+    Animatronic Nights - Dedicated Game ESP Suite (animatronic_nights.lua)
     Features:
-      - All-Inclusive Item & Green Rod ESP (ORANGE Solid Fill for Fuses, Rods, Tools, Pickups, Objects, Prompts)
-      - Animatronic ESP (RED Solid Highlight for Monsters/Killers/Animatronics)
-      - Player ESP (GREEN Highlight for Night Guard Players)
-      - Real-Time Instance Added/Removed Listeners for Zero-Lag ESP
-      - Full Universal JSON Auto-Save via lib.lua
+      - Player ESP (GREEN Highlight ONLY for human players, excluding Killer player character)
+      - Killer ESP (RED Solid Highlight for Animatronic Monster/Killer in workspace)
+      - Green Rods & Fuse Box ESP (ORANGE Solid Fill ONLY for Green Rods & Fuse Boxes)
+      - Universal JSON Auto-Save via lib.lua
 ]]
 
 local Players = game:GetService("Players")
@@ -62,6 +61,25 @@ local function createHighlight(adornee, color, name)
     return highlight
 end
 
+-- Check if a player character is currently the Animatronic Killer
+local function isPlayerKiller(player)
+    if not player or not player.Character then return false end
+    local char = player.Character
+    local name = char.Name:lower()
+
+    -- Check if character name or team indicates Animatronic / Killer
+    if name:find("animatronic") or name:find("killer") or name:find("monster") or 
+       name:find("freddy") or name:find("bonnie") or name:find("chica") or name:find("foxy") then
+        return true
+    end
+
+    if player.Team and player.Team.Name:lower():find("killer") then
+        return true
+    end
+
+    return false
+end
+
 -- --------------------------------------------------------------------
 -- 1. AUTOMATION: AUTO-INSERT GREEN RODS INTO FUSE BOX
 -- --------------------------------------------------------------------
@@ -108,7 +126,7 @@ end)
 
 
 -- --------------------------------------------------------------------
--- 2. PLAYER ESP (GREEN)
+-- 2. PLAYER ESP (GREEN - EXCLUDES KILLER PLAYER)
 -- --------------------------------------------------------------------
 local function applyPlayerESP(player)
     if player == LocalPlayer then return end
@@ -120,6 +138,11 @@ local function applyPlayerESP(player)
             playerHighlights[player] = nil
         end
         if not Config.PlayerEsp then return end
+
+        -- If this player is the Animatronic Killer, do NOT apply green ESP
+        if isPlayerKiller(player) then
+            return
+        end
 
         playerHighlights[player] = createHighlight(char, Color3.fromRGB(0, 255, 128), "PlayerGreenESP")
     end
@@ -143,7 +166,7 @@ local function refreshPlayerESP()
 end
 
 -- --------------------------------------------------------------------
--- 3. ANIMATRONIC / KILLER ESP (RED)
+-- 3. ANIMATRONIC / KILLER ESP (RED - HIGH SENSITIVITY SCANNER)
 -- --------------------------------------------------------------------
 local function isAnimatronicKiller(obj)
     if not obj then return false end
@@ -152,20 +175,30 @@ local function isAnimatronicKiller(obj)
     local name = obj.Name:lower()
     local parentName = obj.Parent and obj.Parent.Name:lower() or ""
 
-    if Players:GetPlayerFromCharacter(obj) then return false end
+    -- 1. Check if a human player is playing as the Killer
+    local plr = Players:GetPlayerFromCharacter(obj)
+    if plr then
+        if isPlayerKiller(plr) then
+            return true
+        end
+        return false
+    end
 
+    -- 2. Check NPC / Monster models in Workspace
     if name:find("animatronic") or name:find("killer") or name:find("monster") or 
        name:find("bot") or name:find("npc") or name:find("freddy") or 
        name:find("bonnie") or name:find("chica") or name:find("foxy") or 
        name:find("puppet") or name:find("springtrap") or name:find("mangle") or
        name:find("bear") or name:find("rabbit") or name:find("fox") or
        name:find("duck") or name:find("endo") or name:find("entity") or
-       parentName:find("animatronic") or parentName:find("killer") or parentName:find("monster") then
+       parentName:find("animatronic") or parentName:find("killer") or parentName:find("monster") or
+       parentName:find("bot") or parentName:find("npc") then
         return true
     end
 
+    -- 3. Check Workspace models containing a Humanoid that are NOT normal players
     local hum = obj:FindFirstChildOfClass("Humanoid") or obj:FindFirstChildOfClass("AnimationController")
-    if hum and not Players:GetPlayerFromCharacter(obj) then
+    if hum then
         if obj:FindFirstChild("HumanoidRootPart") or obj:FindFirstChild("Head") or obj:FindFirstChild("Torso") then
             return true
         end
@@ -193,35 +226,35 @@ local function scanAnimatronics()
 end
 
 -- --------------------------------------------------------------------
--- 4. ALL-INCLUSIVE GREEN ROD / FUSE / ITEM ESP (ORANGE SOLID FILL)
+-- 4. GREEN RODS & FUSE BOX ESP ONLY (ORANGE SOLID FILL)
 -- --------------------------------------------------------------------
-local function isInteractableItemOrFuse(obj)
+local function isGreenRodOrFuseBox(obj)
     if not obj then return false end
-
-    -- Ignore Workspace map basework, terrain, and player characters
     if obj == Workspace or obj:IsA("Terrain") then return false end
+
+    -- Skip players and killers
     if Players:GetPlayerFromCharacter(obj) or isAnimatronicKiller(obj) then return false end
 
-    -- Check if object contains any ProximityPrompt or ClickDetector (Items, Fuses, Rods, Switches, Boxes)
-    for _, child in ipairs(obj:GetChildren()) do
-        if child:IsA("ProximityPrompt") or child:IsA("ClickDetector") then
-            return true
-        end
-    end
-
-    -- Check object/model names for any item, rod, fuse, or tool keywords
     local name = obj.Name:lower()
-    if name:find("fuse") or name:find("rod") or name:find("stick") or 
-       name:find("green") or name:find("battery") or name:find("generator") or 
-       name:find("box") or name:find("electric") or name:find("panel") or 
-       name:find("item") or name:find("tool") or name:find("handle") or
-       name:find("key") or name:find("card") or name:find("part") then
+
+    -- Strict match for Green Rods / Stäbchen and Fuse Boxes
+    if name:find("green") or name:find("rod") or name:find("stäbchen") or 
+       name:find("fusebox") or name:find("fuse_box") or name:find("sicherung") or 
+       name:find("fuse box") or (name:find("fuse") and name:find("box")) or
+       name:find("power") or name:find("battery") or name:find("panel") then
         return true
     end
 
-    -- If object is a Tool inside Workspace
-    if obj:IsA("Tool") then
-        return true
+    -- Check ProximityPrompts for Green Rod / Fuse Box action text
+    for _, child in ipairs(obj:GetChildren()) do
+        if child:IsA("ProximityPrompt") then
+            local action = child.ActionText:lower()
+            local objectText = child.ObjectText:lower()
+            if action:find("rod") or action:find("green") or action:find("fuse") or action:find("insert") or 
+               objectText:find("rod") or objectText:find("green") or objectText:find("fuse") or objectText:find("sicherung") then
+                return true
+            end
+        end
     end
 
     return false
@@ -230,7 +263,7 @@ end
 local function checkAndHighlightItem(obj)
     if not Config.ItemEsp then return end
     if (obj:IsA("BasePart") or obj:IsA("Model") or obj:IsA("Tool")) and not itemHighlights[obj] then
-        if isInteractableItemOrFuse(obj) then
+        if isGreenRodOrFuseBox(obj) then
             itemHighlights[obj] = createHighlight(obj, Color3.fromRGB(255, 140, 0), "ItemOrangeESP")
         end
     end
@@ -299,15 +332,15 @@ espTab:CreateToggleSwitch("Animatronic / Killer ESP (RED)", false, function(val)
     end
 end)
 
-espTab:CreateToggleSwitch("Fuses / Rods / Items ESP (ORANGE)", false, function(val)
+espTab:CreateToggleSwitch("Green Rods & Fuse Box ESP (ORANGE)", false, function(val)
     Config.ItemEsp = val
     scanItems()
     if val then
-        lib:Notify("Item ESP", "Orange Rods & Fuses ESP Activated!", 2.0)
+        lib:Notify("Fuse ESP", "Orange Green Rods & Fuse Box ESP Activated!", 2.0)
     else
         for obj, hl in pairs(itemHighlights) do pcall(function() hl:Destroy() end) end
         table.clear(itemHighlights)
-        lib:Notify("Item ESP", "Item ESP Deactivated.", 1.5)
+        lib:Notify("Fuse ESP", "Fuse Box ESP Deactivated.", 1.5)
     end
 end)
 
@@ -365,4 +398,4 @@ settingsTab:CreateSlider("Window Transparency", 0, 90, 25, function(val)
     int:SetTransparency(val / 100)
 end)
 
-print("[Animatronic Nights] Universal All-Item ESP Suite Loaded!")
+print("[Animatronic Nights] Corrected Animatronic & Player ESP Suite Loaded!")
