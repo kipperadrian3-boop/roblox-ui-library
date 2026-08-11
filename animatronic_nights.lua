@@ -1,10 +1,10 @@
 --[[
-    Animatronic Nights - Advanced ESP & Automation Suite (animatronic_nights.lua)
+    Animatronic Nights - Universal Item & Fuse ESP Suite (animatronic_nights.lua)
     Features:
-      - Automation Tab: Auto-Insert Green Rods into Fuse Box (Fires ProximityPrompts within range)
-      - Animatronic ESP (RED Solid Highlight for all Monsters/Killers/Animatronics)
-      - Green Rods & Fuse Box ESP (ORANGE Solid Fill ONLY for Green Rods & Fuse Boxes)
+      - All-Inclusive Item & Green Rod ESP (ORANGE Solid Fill for Fuses, Rods, Tools, Pickups, Objects, Prompts)
+      - Animatronic ESP (RED Solid Highlight for Monsters/Killers/Animatronics)
       - Player ESP (GREEN Highlight for Night Guard Players)
+      - Real-Time Instance Added/Removed Listeners for Zero-Lag ESP
       - Full Universal JSON Auto-Save via lib.lua
 ]]
 
@@ -38,9 +38,9 @@ local Config = {
     AnimatronicEsp = false,
     ItemEsp = false,
     AutoInsertRods = false,
-    AutoInsertRadius = 15, -- Studs range for auto-inserting
-    FillTransparency = 0.2, -- Solid vibrant fill
-    OutlineTransparency = 1 -- NO stroke outline clutter!
+    AutoInsertRadius = 15,
+    FillTransparency = 0.2,
+    OutlineTransparency = 1 -- NO stroke outline clutter
 }
 
 -- Active Highlight Containers
@@ -48,7 +48,7 @@ local playerHighlights = {}
 local animatronicHighlights = {}
 local itemHighlights = {}
 
--- Helper to create a Solid Highlight on any instance (No stroke outline clutter)
+-- Helper to create a Solid Highlight on any instance
 local function createHighlight(adornee, color, name)
     local highlight = Instance.new("Highlight")
     highlight.Name = name or "AnimatronicSuiteESP"
@@ -56,7 +56,7 @@ local function createHighlight(adornee, color, name)
     highlight.FillColor = color
     highlight.OutlineColor = color
     highlight.FillTransparency = Config.FillTransparency
-    highlight.OutlineTransparency = Config.OutlineTransparency -- 1 = No stroke outline
+    highlight.OutlineTransparency = Config.OutlineTransparency
     highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop -- Visible through all walls!
     highlight.Parent = adornee
     return highlight
@@ -71,7 +71,6 @@ local function fireProximityPrompt(prompt)
         if fireproximityprompt then
             fireproximityprompt(prompt)
         else
-            -- Fallback: Trigger input directly
             prompt:InputHoldBegin()
             task.wait(prompt.HoldDuration or 0.1)
             prompt:InputHoldEnd()
@@ -79,7 +78,6 @@ local function fireProximityPrompt(prompt)
     end)
 end
 
--- Loop to check nearby Fuse Boxes / Electrical Panels and auto-insert Green Rods
 task.spawn(function()
     while true do
         task.wait(0.2)
@@ -93,21 +91,12 @@ task.spawn(function()
                     if not Config.AutoInsertRods then break end
 
                     if descendant:IsA("ProximityPrompt") then
-                        local actionText = descendant.ActionText:lower()
-                        local objectText = descendant.ObjectText:lower()
-
-                        -- Match Fuse Box / Green Rod insertion prompts
-                        if actionText:find("insert") or actionText:find("rod") or actionText:find("fuse") or actionText:find("fix") or
-                           objectText:find("fuse") or objectText:find("box") or objectText:find("rod") or objectText:find("sicherung") then
-                            
-                            local parentPart = descendant.Parent
-                            if parentPart and parentPart:IsA("BasePart") then
-                                local dist = (hrp.Position - parentPart.Position).Magnitude
-                                if dist <= Config.AutoInsertRadius then
-                                    fireProximityPrompt(descendant)
-                                    lib:Notify("Auto-Insert", "Inserted Green Rod into Fuse Box!", 1.5)
-                                    task.wait(0.3)
-                                end
+                        local parentPart = descendant.Parent
+                        if parentPart and parentPart:IsA("BasePart") then
+                            local dist = (hrp.Position - parentPart.Position).Magnitude
+                            if dist <= Config.AutoInsertRadius then
+                                fireProximityPrompt(descendant)
+                                task.wait(0.2)
                             end
                         end
                     end
@@ -204,28 +193,35 @@ local function scanAnimatronics()
 end
 
 -- --------------------------------------------------------------------
--- 4. GREEN RODS & FUSE BOX ESP ONLY (ORANGE SOLID FILL)
+-- 4. ALL-INCLUSIVE GREEN ROD / FUSE / ITEM ESP (ORANGE SOLID FILL)
 -- --------------------------------------------------------------------
-local function isGreenRodOrFuseBox(obj)
+local function isInteractableItemOrFuse(obj)
     if not obj then return false end
-    local name = obj.Name:lower()
 
-    if name:find("green") or name:find("rod") or name:find("stäbchen") or 
-       name:find("fusebox") or name:find("fuse_box") or name:find("sicherung") or 
-       name:find("fuse box") or (name:find("fuse") and name:find("box")) then
+    -- Ignore Workspace map basework, terrain, and player characters
+    if obj == Workspace or obj:IsA("Terrain") then return false end
+    if Players:GetPlayerFromCharacter(obj) or isAnimatronicKiller(obj) then return false end
+
+    -- Check if object contains any ProximityPrompt or ClickDetector (Items, Fuses, Rods, Switches, Boxes)
+    for _, child in ipairs(obj:GetChildren()) do
+        if child:IsA("ProximityPrompt") or child:IsA("ClickDetector") then
+            return true
+        end
+    end
+
+    -- Check object/model names for any item, rod, fuse, or tool keywords
+    local name = obj.Name:lower()
+    if name:find("fuse") or name:find("rod") or name:find("stick") or 
+       name:find("green") or name:find("battery") or name:find("generator") or 
+       name:find("box") or name:find("electric") or name:find("panel") or 
+       name:find("item") or name:find("tool") or name:find("handle") or
+       name:find("key") or name:find("card") or name:find("part") then
         return true
     end
 
-    for _, child in ipairs(obj:GetChildren()) do
-        if child:IsA("ProximityPrompt") then
-            local action = child.ActionText:lower()
-            local objectText = child.ObjectText:lower()
-            if action:find("rod") or action:find("green") or action:find("fuse box") or 
-               objectText:find("rod") or objectText:find("green") or objectText:find("fuse box") or
-               objectText:find("sicherung") then
-                return true
-            end
-        end
+    -- If object is a Tool inside Workspace
+    if obj:IsA("Tool") then
+        return true
     end
 
     return false
@@ -234,7 +230,7 @@ end
 local function checkAndHighlightItem(obj)
     if not Config.ItemEsp then return end
     if (obj:IsA("BasePart") or obj:IsA("Model") or obj:IsA("Tool")) and not itemHighlights[obj] then
-        if isGreenRodOrFuseBox(obj) then
+        if isInteractableItemOrFuse(obj) then
             itemHighlights[obj] = createHighlight(obj, Color3.fromRGB(255, 140, 0), "ItemOrangeESP")
         end
     end
@@ -303,15 +299,15 @@ espTab:CreateToggleSwitch("Animatronic / Killer ESP (RED)", false, function(val)
     end
 end)
 
-espTab:CreateToggleSwitch("Green Rods & Fuse Box ESP (ORANGE)", false, function(val)
+espTab:CreateToggleSwitch("Fuses / Rods / Items ESP (ORANGE)", false, function(val)
     Config.ItemEsp = val
     scanItems()
     if val then
-        lib:Notify("Fuse ESP", "Orange Green Rods & Fuse Box ESP Activated!", 2.0)
+        lib:Notify("Item ESP", "Orange Rods & Fuses ESP Activated!", 2.0)
     else
         for obj, hl in pairs(itemHighlights) do pcall(function() hl:Destroy() end) end
         table.clear(itemHighlights)
-        lib:Notify("Fuse ESP", "Fuse Box ESP Deactivated.", 1.5)
+        lib:Notify("Item ESP", "Item ESP Deactivated.", 1.5)
     end
 end)
 
@@ -369,4 +365,4 @@ settingsTab:CreateSlider("Window Transparency", 0, 90, 25, function(val)
     int:SetTransparency(val / 100)
 end)
 
-print("[Animatronic Nights] Automation & ESP Suite Loaded!")
+print("[Animatronic Nights] Universal All-Item ESP Suite Loaded!")
