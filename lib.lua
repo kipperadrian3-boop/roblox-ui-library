@@ -1,10 +1,14 @@
 --[[
-    Roblox UI Library Framework - Glassmorphism Edition (lib.lua)
-    Supports Themes, Glass Transparency, Notifications, Keybinds, ColorPickers, Switches, Dropdowns & Animations
+    Roblox UI Library Framework - Glassmorphism Edition with Universal JSON Config Engine (lib.lua)
+    Supports:
+      - Universal JSON Auto-Save & Auto-Load (writefile / readfile / HttpService)
+      - Themes & Glass Transparency
+      - Notifications, Keybinds, Switches, Sliders, Dropdowns & Animations
 ]]
 
 local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
+local HttpService = game:GetService("HttpService")
 local CoreGui = game:GetService("CoreGui")
 local Players = game:GetService("Players")
 
@@ -101,6 +105,46 @@ local DefaultThemes = {
         SubText = Color3.fromRGB(175, 145, 205)
     }
 }
+
+-- CONFIG FILE SYSTEM UTILITIES
+local CONFIG_FOLDER = "AdminSuite_Configs"
+
+local function isFileSystemSupported()
+    return (type(writefile) == "function" and type(readfile) == "function")
+end
+
+local function getSanitizedFileName(title)
+    local str = tostring(title or "Default_Suite"):gsub("[%s%W]", "_")
+    return CONFIG_FOLDER .. "/" .. str .. ".json"
+end
+
+local function saveJSON(title, dataTable)
+    if not isFileSystemSupported() then return false end
+    local success, err = pcall(function()
+        if type(isfolder) == "function" and not isfolder(CONFIG_FOLDER) then
+            if type(makefolder) == "function" then
+                makefolder(CONFIG_FOLDER)
+            end
+        end
+        local path = getSanitizedFileName(title)
+        local encoded = HttpService:JSONEncode(dataTable)
+        writefile(path, encoded)
+    end)
+    return success
+end
+
+local function loadJSON(title)
+    if not isFileSystemSupported() then return nil end
+    local result = nil
+    pcall(function()
+        local path = getSanitizedFileName(title)
+        if type(isfile) == "function" and isfile(path) then
+            local content = readfile(path)
+            result = HttpService:JSONDecode(content)
+        end
+    end)
+    return result
+end
 
 local function create(instanceType, properties)
     local inst = Instance.new(instanceType)
@@ -208,6 +252,7 @@ function Library:Notify(title, message, duration, icon)
 end
 
 function Library:CreateInterface(titleText, descText, discordLink, position, themeName, bgTransparency)
+    local suiteTitle = titleText or "Default_Suite"
     local themeKey = tostring(themeName or "royal"):lower()
     local theme = DefaultThemes[themeKey] or DefaultThemes.royal
     local glassTransparency = bgTransparency or 0.25
@@ -425,6 +470,10 @@ function Library:CreateInterface(titleText, descText, discordLink, position, the
         Parent = MainFrame
     })
 
+    -- Universal JSON Config State for this Interface
+    local LoadedConfigData = loadJSON(suiteTitle) or {}
+    local ActiveConfigState = LoadedConfigData or {}
+
     local InterfaceObj = {
         ScreenGui = ScreenGui,
         MainFrame = MainFrame,
@@ -433,10 +482,38 @@ function Library:CreateInterface(titleText, descText, discordLink, position, the
         Tabs = {},
         ActiveTab = nil,
         Theme = theme,
-        GlassTransparency = glassTransparency
+        GlassTransparency = glassTransparency,
+        SuiteTitle = suiteTitle,
+        ConfigState = ActiveConfigState
     }
 
-    -- Toggle Minimize Animation with FIXED TAB RESTORE LOGIC
+    -- Auto-save trigger
+    local function autoSaveConfig()
+        InterfaceObj.ConfigState.Theme = InterfaceObj.ThemeName or themeKey
+        InterfaceObj.ConfigState.Transparency = InterfaceObj.GlassTransparency
+        saveJSON(suiteTitle, InterfaceObj.ConfigState)
+    end
+
+    -- Restore saved Theme & Transparency if present in JSON
+    if LoadedConfigData.Theme then
+        local savedThemeKey = tostring(LoadedConfigData.Theme):lower()
+        if DefaultThemes[savedThemeKey] then
+            themeKey = savedThemeKey
+            theme = DefaultThemes[savedThemeKey]
+            InterfaceObj.Theme = theme
+            InterfaceObj.ThemeName = savedThemeKey
+        end
+    end
+    if LoadedConfigData.Transparency then
+        glassTransparency = math.clamp(tonumber(LoadedConfigData.Transparency) or 0.25, 0, 0.9)
+        InterfaceObj.GlassTransparency = glassTransparency
+    end
+
+    if LoadedConfigData and next(LoadedConfigData) then
+        Library:Notify("Config Loaded", "Restored JSON settings for " .. suiteTitle, 2.5)
+    end
+
+    -- Toggle Minimize Animation
     MinimizeBtn.MouseButton1Click:Connect(function()
         Minimized = not Minimized
         if Minimized then
@@ -461,12 +538,14 @@ function Library:CreateInterface(titleText, descText, discordLink, position, the
         MainFrame.BackgroundTransparency = transparencyVal
         Header.BackgroundTransparency = math.clamp(transparencyVal - 0.1, 0, 1)
         TabBar.BackgroundTransparency = math.clamp(transparencyVal - 0.05, 0, 1)
+        autoSaveConfig()
     end
 
     function InterfaceObj:SetTheme(newThemeName)
         local key = tostring(newThemeName or "royal"):lower()
         local t = DefaultThemes[key] or DefaultThemes.royal
         InterfaceObj.Theme = t
+        InterfaceObj.ThemeName = key
         theme = t
         for _, updater in ipairs(themeUpdaters) do
             pcall(updater, t)
@@ -474,6 +553,20 @@ function Library:CreateInterface(titleText, descText, discordLink, position, the
         if InterfaceObj.ActiveTab and InterfaceObj.ActiveTab.Activate then
             InterfaceObj.ActiveTab.Activate()
         end
+        autoSaveConfig()
+    end
+
+    function InterfaceObj:SaveConfig()
+        return saveJSON(suiteTitle, InterfaceObj.ConfigState)
+    end
+
+    function InterfaceObj:LoadConfig()
+        local data = loadJSON(suiteTitle)
+        if data then
+            InterfaceObj.ConfigState = data
+            return data
+        end
+        return nil
     end
 
     function InterfaceObj:CreateTab(tabName, tabDesc, icon, isDefault)
@@ -555,12 +648,16 @@ function Library:CreateInterface(titleText, descText, discordLink, position, the
         end
 
         -- -------------------------------------------------------------
-        -- ELEMENT BUILDERS
+        -- ELEMENT BUILDERS WITH JSON AUTO-SAVE & RESTORE
         -- -------------------------------------------------------------
 
-        -- 1. Animated Pill Switch Toggle
+        -- 1. Animated Pill Switch Toggle (JSON Auto-Saved)
         function TabObj:CreateToggleSwitch(labelTitle, defaultState, callback)
-            local state = defaultState or false
+            local configKey = tabName .. "_" .. labelTitle
+            local savedVal = InterfaceObj.ConfigState[configKey]
+            local state = (savedVal ~= nil) and savedVal or (defaultState or false)
+
+            InterfaceObj.ConfigState[configKey] = state
 
             local Card = create("Frame", {
                 Size = UDim2.new(1, 0, 0, 38),
@@ -602,21 +699,25 @@ function Library:CreateInterface(titleText, descText, discordLink, position, the
             })
             create("UICorner", { CornerRadius = UDim.new(1, 0), Parent = Knob })
 
-            local function toggleState()
-                state = not state
+            local function toggleState(isManual)
+                if isManual then state = not state end
+
                 local targetPos = state and UDim2.new(1, -19, 0.5, -8) or UDim2.new(0, 3, 0.5, -8)
                 local targetBg = state and InterfaceObj.Theme.Accent or InterfaceObj.Theme.MainBg
 
                 TweenService:Create(Knob, TweenInfo.new(0.2, Enum.EasingStyle.Quart), { Position = targetPos }):Play()
                 TweenService:Create(PillTrack, TweenInfo.new(0.2, Enum.EasingStyle.Quart), { BackgroundColor3 = targetBg }):Play()
 
+                InterfaceObj.ConfigState[configKey] = state
+                autoSaveConfig()
+
                 if callback then pcall(callback, state) end
             end
 
-            PillTrack.MouseButton1Click:Connect(toggleState)
+            PillTrack.MouseButton1Click:Connect(function() toggleState(true) end)
             Label.InputBegan:Connect(function(input)
                 if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-                    toggleState()
+                    toggleState(true)
                 end
             end)
 
@@ -626,6 +727,11 @@ function Library:CreateInterface(titleText, descText, discordLink, position, the
                 PillTrack.BackgroundColor3 = state and t.Accent or t.MainBg
             end)
 
+            -- Invoke callback if restored from JSON on startup
+            if savedVal ~= nil and callback then
+                pcall(callback, state)
+            end
+
             return Card
         end
 
@@ -634,7 +740,7 @@ function Library:CreateInterface(titleText, descText, discordLink, position, the
             return TabObj:CreateToggleSwitch(labelTitle, false, callback)
         end
 
-        -- 2. Slider Component
+        -- 2. Slider Component (JSON Auto-Saved)
         function TabObj:CreateSlider(labelTitle, minValArg, maxValArg, defaultValArg, callbackArg)
             local minVal, maxVal, defaultVal, callback
 
@@ -654,6 +760,12 @@ function Library:CreateInterface(titleText, descText, discordLink, position, the
                 defaultVal = defaultValArg or minVal
                 callback = callbackArg
             end
+
+            local configKey = tabName .. "_" .. labelTitle
+            local savedVal = InterfaceObj.ConfigState[configKey]
+            local currentVal = (savedVal ~= nil) and tonumber(savedVal) or defaultVal
+
+            InterfaceObj.ConfigState[configKey] = currentVal
 
             local Card = create("Frame", {
                 Size = UDim2.new(1, 0, 0, 52),
@@ -680,7 +792,7 @@ function Library:CreateInterface(titleText, descText, discordLink, position, the
                 Size = UDim2.new(0.25, 0, 0, 22),
                 Position = UDim2.new(0.72, 0, 0, 4),
                 BackgroundTransparency = 1,
-                Text = tostring(defaultVal),
+                Text = tostring(currentVal),
                 TextColor3 = InterfaceObj.Theme.SubText,
                 TextSize = 13,
                 Font = Enum.Font.GothamBold,
@@ -697,7 +809,7 @@ function Library:CreateInterface(titleText, descText, discordLink, position, the
             })
             create("UICorner", { CornerRadius = UDim.new(0, 4), Parent = SliderTrack })
 
-            local fillPercent = math.clamp((defaultVal - minVal) / math.max(maxVal - minVal, 1), 0, 1)
+            local fillPercent = math.clamp((currentVal - minVal) / math.max(maxVal - minVal, 1), 0, 1)
             local SliderFill = create("Frame", {
                 Size = UDim2.new(fillPercent, 0, 1, 0),
                 BackgroundColor3 = InterfaceObj.Theme.Accent,
@@ -719,8 +831,11 @@ function Library:CreateInterface(titleText, descText, discordLink, position, the
             local function updateSlider(input)
                 local pos = math.clamp((input.Position.X - SliderTrack.AbsolutePosition.X) / SliderTrack.AbsoluteSize.X, 0, 1)
                 local val = math.floor(minVal + (maxVal - minVal) * pos)
+                currentVal = val
                 SliderFill.Size = UDim2.new(pos, 0, 1, 0)
                 ValueLabel.Text = tostring(val)
+                InterfaceObj.ConfigState[configKey] = val
+                autoSaveConfig()
                 if callback then pcall(callback, val) end
             end
 
@@ -743,11 +858,22 @@ function Library:CreateInterface(titleText, descText, discordLink, position, the
                 end
             end)
 
+            -- Invoke callback if restored from JSON on startup
+            if savedVal ~= nil and callback then
+                pcall(callback, currentVal)
+            end
+
             return Card
         end
 
-        -- 3. Textbox / Input Component
+        -- 3. Textbox / Input Component (JSON Auto-Saved)
         function TabObj:CreateTextbox(labelTitle, placeholderText, defaultVal, callback)
+            local configKey = tabName .. "_" .. labelTitle
+            local savedVal = InterfaceObj.ConfigState[configKey]
+            local textVal = (savedVal ~= nil) and tostring(savedVal) or (defaultVal or "")
+
+            InterfaceObj.ConfigState[configKey] = textVal
+
             local Card = create("Frame", {
                 Size = UDim2.new(1, 0, 0, 42),
                 BackgroundColor3 = InterfaceObj.Theme.CardBg,
@@ -773,7 +899,7 @@ function Library:CreateInterface(titleText, descText, discordLink, position, the
                 Size = UDim2.new(0.5, -12, 0, 28),
                 Position = UDim2.new(0.5, 0, 0.5, -14),
                 BackgroundColor3 = InterfaceObj.Theme.MainBg,
-                Text = defaultVal or "",
+                Text = textVal,
                 PlaceholderText = placeholderText or "Enter value...",
                 PlaceholderColor3 = InterfaceObj.Theme.SubText,
                 TextColor3 = InterfaceObj.Theme.TextColor,
@@ -785,6 +911,8 @@ function Library:CreateInterface(titleText, descText, discordLink, position, the
             create("UICorner", { CornerRadius = UDim.new(0, 5), Parent = InputBox })
 
             InputBox.FocusLost:Connect(function(enterPressed)
+                InterfaceObj.ConfigState[configKey] = InputBox.Text
+                autoSaveConfig()
                 if callback then pcall(callback, InputBox.Text, enterPressed) end
             end)
 
@@ -796,12 +924,22 @@ function Library:CreateInterface(titleText, descText, discordLink, position, the
                 InputBox.TextColor3 = t.TextColor
             end)
 
+            if savedVal ~= nil and callback then
+                pcall(callback, textVal, false)
+            end
+
             return Card
         end
 
-        -- 4. Keybind Picker Component
+        -- 4. Keybind Picker Component (JSON Auto-Saved)
         function TabObj:CreateKeybind(labelTitle, defaultKey, callback)
-            local currentKey = defaultKey or Enum.KeyCode.K
+            local configKey = tabName .. "_" .. labelTitle
+            local savedVal = InterfaceObj.ConfigState[configKey]
+            local currentKeyName = (savedVal ~= nil) and tostring(savedVal) or (defaultKey and defaultKey.Name or "K")
+            local currentKey = Enum.KeyCode[currentKeyName] or defaultKey or Enum.KeyCode.K
+
+            InterfaceObj.ConfigState[configKey] = currentKey.Name
+
             local listening = false
 
             local Card = create("Frame", {
@@ -847,6 +985,8 @@ function Library:CreateInterface(titleText, descText, discordLink, position, the
                     listening = false
                     currentKey = input.KeyCode
                     KeyBtn.Text = currentKey.Name
+                    InterfaceObj.ConfigState[configKey] = currentKey.Name
+                    autoSaveConfig()
                     if callback then pcall(callback, currentKey) end
                 end
             end)
@@ -857,6 +997,10 @@ function Library:CreateInterface(titleText, descText, discordLink, position, the
                 KeyBtn.BackgroundColor3 = t.MainBg
                 KeyBtn.TextColor3 = t.Accent
             end)
+
+            if savedVal ~= nil and callback then
+                pcall(callback, currentKey)
+            end
 
             return Card
         end
@@ -928,9 +1072,11 @@ function Library:CreateInterface(titleText, descText, discordLink, position, the
             return CommentObj
         end
 
-        -- 6. Searchable Dropdown
+        -- 6. Searchable Dropdown (JSON Auto-Saved)
         function TabObj:CreateDropDown(dropTitle, callback)
             local isOpen = false
+
+            local configKey = tabName .. "_" .. dropTitle
 
             local DropCard = create("Frame", {
                 Size = UDim2.new(1, 0, 0, 36),
@@ -1084,13 +1230,25 @@ function Library:CreateInterface(titleText, descText, discordLink, position, the
                 end)
 
                 Btn.MouseButton1Click:Connect(function()
+                    InterfaceObj.ConfigState[configKey] = btnText
+                    autoSaveConfig()
                     if btnCallback then pcall(btnCallback) end
                 end)
+
+                -- Check if restored from JSON on startup
+                if InterfaceObj.ConfigState[configKey] == btnText and btnCallback then
+                    pcall(btnCallback)
+                end
+
                 return Btn
             end
 
             function DropdownObj:AddCheckbox(chkText, chkCallback)
-                local chkState = false
+                local chkKey = configKey .. "_" .. chkText
+                local savedChk = InterfaceObj.ConfigState[chkKey]
+                local chkState = (savedChk ~= nil) and savedChk or false
+
+                InterfaceObj.ConfigState[chkKey] = chkState
 
                 local ChkFrame = create("Frame", {
                     Size = UDim2.new(1, 0, 0, 28),
@@ -1124,7 +1282,7 @@ function Library:CreateInterface(titleText, descText, discordLink, position, the
                     Size = UDim2.new(0, 10, 0, 10),
                     Position = UDim2.new(0.5, -5, 0.5, -5),
                     BackgroundColor3 = InterfaceObj.Theme.Accent,
-                    Visible = false,
+                    Visible = chkState,
                     Parent = ChkBox
                 })
                 create("UICorner", { CornerRadius = UDim.new(0, 2), Parent = Ind })
@@ -1133,6 +1291,8 @@ function Library:CreateInterface(titleText, descText, discordLink, position, the
                     chkState = not chkState
                     Ind.Visible = chkState
                     ChkBox.BackgroundColor3 = chkState and InterfaceObj.Theme.Accent or InterfaceObj.Theme.CardBg
+                    InterfaceObj.ConfigState[chkKey] = chkState
+                    autoSaveConfig()
                     if chkCallback then pcall(chkCallback, chkState) end
                 end
 
@@ -1149,6 +1309,10 @@ function Library:CreateInterface(titleText, descText, discordLink, position, the
                     ChkBox.BackgroundColor3 = chkState and t.Accent or t.CardBg
                     Ind.BackgroundColor3 = t.Accent
                 end)
+
+                if savedChk ~= nil and chkCallback then
+                    pcall(chkCallback, chkState)
+                end
 
                 return ChkFrame
             end
