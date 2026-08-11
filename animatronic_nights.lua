@@ -2,21 +2,20 @@
     Animatronic Nights - Advanced ESP Suite (animatronic_nights.lua)
     Features:
       - Animatronic ESP (RED Highlight for Animatronics / Monsters)
+      - Fuse / Green Rod / Electrical Box ESP (ORANGE Highlight for Electrical Items)
       - Player ESP (GREEN Highlight for Night Guard Players)
-      - Fuse / Rod / Battery ESP (ORANGE Highlight for Electrical Fuse Rods & Boxes)
-      - Auto-Updates on Spawns & Map Changes
-    Powered by Custom UI Framework (lib.lua)
+      - Real-Time Instance Added/Removed Listeners for Zero-Lag Instant ESP Updates
+      - Full Universal JSON Auto-Save via lib.lua
 ]]
 
 local Players = game:GetService("Players")
 local Workspace = game:GetService("Workspace")
-local RunService = game:GetService("RunService")
 
 local LocalPlayer = Players.LocalPlayer
 
 local REPO_URL = "https://raw.githubusercontent.com/kipperadrian3-boop/roblox-ui-library/main/"
 
--- Load UI Library Framework (lib.lua with dynamic cache buster)
+-- Load UI Library Framework (lib.lua with dynamic cache buster & JSON auto-save engine)
 local success, lib = pcall(function()
     return loadstring(game:HttpGet(REPO_URL .. "lib.lua?v=" .. tostring(math.random(1, 9999999))))()
 end)
@@ -55,7 +54,7 @@ local function createHighlight(adornee, color, name)
     highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
     highlight.FillTransparency = Config.FillTransparency
     highlight.OutlineTransparency = Config.OutlineTransparency
-    highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop -- Visible through walls!
+    highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop -- Visible through all walls!
     highlight.Parent = adornee
     return highlight
 end
@@ -102,21 +101,29 @@ local function isAnimatronicModel(obj)
     if not obj or not obj:IsA("Model") then return false end
     local name = obj.Name:lower()
 
-    -- Check common animatronic names or folder tags
+    -- Check common animatronic names or model properties
     if name:find("animatronic") or name:find("monster") or name:find("freddy") or 
        name:find("bonnie") or name:find("chica") or name:find("foxy") or 
        name:find("puppet") or name:find("springtrap") or name:find("mangle") or
-       name:find("killer") or name:find("bear") then
+       name:find("killer") or name:find("bear") or name:find("rabbit") or
+       name:find("duck") or name:find("fox") then
         return true
     end
 
-    -- Check if it has a Humanoid but is not a human player character
+    -- Check if it has a Humanoid but is NOT a human player character
     local hum = obj:FindFirstChildOfClass("Humanoid")
     if hum and not Players:GetPlayerFromCharacter(obj) then
         return true
     end
 
     return false
+end
+
+local function checkAndHighlightAnimatronic(obj)
+    if not Config.AnimatronicEsp then return end
+    if isAnimatronicModel(obj) and not animatronicHighlights[obj] then
+        animatronicHighlights[obj] = createHighlight(obj, Color3.fromRGB(255, 30, 30), "AnimatronicRedESP")
+    end
 end
 
 local function scanAnimatronics()
@@ -126,26 +133,47 @@ local function scanAnimatronics()
     if not Config.AnimatronicEsp then return end
 
     for _, descendant in ipairs(Workspace:GetDescendants()) do
-        if isAnimatronicModel(descendant) then
-            animatronicHighlights[descendant] = createHighlight(descendant, Color3.fromRGB(255, 30, 30), "AnimatronicRedESP")
-        end
+        checkAndHighlightAnimatronic(descendant)
     end
 end
 
 -- --------------------------------------------------------------------
--- 3. FUSE / ROD / ELECTRICAL BOX ESP (ORANGE)
+-- 3. FUSE / GREEN ROD / ELECTRICAL BOX ESP (ORANGE)
 -- --------------------------------------------------------------------
 local function isFuseOrElectricalItem(obj)
     if not obj then return false end
     local name = obj.Name:lower()
 
-    -- Check for Fuses, Green Rods, Batteries, Generators, Electrical Boxes
+    -- Check for Fuses, Green Rods, Sticks, Batteries, Generators, Electrical Boxes, Panels
     if name:find("fuse") or name:find("rod") or name:find("stick") or 
-       name:find("battery") or name:find("generator") or name:find("box") or 
-       name:find("electric") or name:find("panel") or name:find("plug") then
+       name:find("green") or name:find("battery") or name:find("generator") or 
+       name:find("box") or name:find("electric") or name:find("panel") or 
+       name:find("plug") or name:find("wire") or name:find("circuit") then
         return true
     end
+
+    -- Check ProximityPrompts or ClickDetectors inside the object for electrical terms
+    for _, child in ipairs(obj:GetChildren()) do
+        if child:IsA("ProximityPrompt") then
+            local action = child.ActionText:lower()
+            local objectText = child.ObjectText:lower()
+            if action:find("fuse") or action:find("rod") or action:find("insert") or 
+               objectText:find("fuse") or objectText:find("box") or objectText:find("rod") then
+                return true
+            end
+        end
+    end
+
     return false
+end
+
+local function checkAndHighlightItem(obj)
+    if not Config.ItemEsp then return end
+    if (obj:IsA("BasePart") or obj:IsA("Model") or obj:IsA("Tool")) and not itemHighlights[obj] then
+        if isFuseOrElectricalItem(obj) then
+            itemHighlights[obj] = createHighlight(obj, Color3.fromRGB(255, 140, 0), "ItemOrangeESP")
+        end
+    end
 end
 
 local function scanItems()
@@ -155,24 +183,38 @@ local function scanItems()
     if not Config.ItemEsp then return end
 
     for _, descendant in ipairs(Workspace:GetDescendants()) do
-        if descendant:IsA("BasePart") or descendant:IsA("Model") or descendant:IsA("Tool") then
-            if isFuseOrElectricalItem(descendant) then
-                itemHighlights[descendant] = createHighlight(descendant, Color3.fromRGB(255, 140, 0), "ItemOrangeESP")
-            end
-        end
+        checkAndHighlightItem(descendant)
     end
 end
 
--- Periodic Scanner for Workspace items & Animatronics (every 2.5s)
+-- Real-Time Event Listener for Instant ESP on New Objects
+Workspace.DescendantAdded:Connect(function(descendant)
+    task.wait(0.1)
+    if Config.AnimatronicEsp then
+        checkAndHighlightAnimatronic(descendant)
+    end
+    if Config.ItemEsp then
+        checkAndHighlightItem(descendant)
+    end
+end)
+
+Workspace.DescendantRemoving:Connect(function(descendant)
+    if animatronicHighlights[descendant] then
+        pcall(function() animatronicHighlights[descendant]:Destroy() end)
+        animatronicHighlights[descendant] = nil
+    end
+    if itemHighlights[descendant] then
+        pcall(function() itemHighlights[descendant]:Destroy() end)
+        itemHighlights[descendant] = nil
+    end
+end)
+
+-- Backup Scanner loop every 3s
 task.spawn(function()
     while true do
-        task.wait(2.5)
-        if Config.AnimatronicEsp then
-            scanAnimatronics()
-        end
-        if Config.ItemEsp then
-            scanItems()
-        end
+        task.wait(3.0)
+        if Config.AnimatronicEsp then scanAnimatronics() end
+        if Config.ItemEsp then scanItems() end
     end
 end)
 
@@ -205,7 +247,7 @@ espTab:CreateToggleSwitch("Fuse / Rod / Box ESP (ORANGE)", false, function(val)
     Config.ItemEsp = val
     scanItems()
     if val then
-        lib:Notify("Item ESP", "Orange Fuse & Rod ESP Activated!", 2.0)
+        lib:Notify("Item ESP", "Orange Fuse & Green Rod ESP Activated!", 2.0)
     else
         for obj, hl in pairs(itemHighlights) do pcall(function() hl:Destroy() end) end
         table.clear(itemHighlights)
@@ -248,4 +290,4 @@ settingsTab:CreateSlider("Window Transparency", 0, 90, 25, function(val)
     int:SetTransparency(val / 100)
 end)
 
-print("[Animatronic Nights] Advanced ESP Suite (Red Animatronics, Orange Fuses/Rods, Green Players) Loaded!")
+print("[Animatronic Nights] Advanced Real-Time ESP Suite (Red Animatronics, Orange Fuses/Green Rods, Green Players) Loaded!")
