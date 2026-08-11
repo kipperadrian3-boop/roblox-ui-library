@@ -1,11 +1,11 @@
 --[[
-    Animatronic Nights - Advanced ESP & Visuals Suite (animatronic_nights.lua)
+    Animatronic Nights - Advanced ESP & Automation Suite (animatronic_nights.lua)
     Features:
+      - Automation Tab: Auto-Insert Green Rods into Fuse Box (Fires ProximityPrompts within range)
       - Animatronic ESP (RED Solid Highlight for all Monsters/Killers/Animatronics)
       - Green Rods & Fuse Box ESP (ORANGE Solid Fill ONLY for Green Rods & Fuse Boxes)
       - Player ESP (GREEN Highlight for Night Guard Players)
-      - Pure Solid Fill (No Stroke Clutter)
-      - Real-Time Instance Added/Removed Listeners for Zero-Lag ESP
+      - Full Universal JSON Auto-Save via lib.lua
 ]]
 
 local Players = game:GetService("Players")
@@ -26,9 +26,10 @@ if not success or not lib or type(lib) ~= "table" then
 end
 
 -- Create Interface with Cyber Blue Theme
-local int = lib:CreateInterface("Animatronic Nights", "ESP & Visuals Suite", "", "bottom left", "cyber", 0.25)
+local int = lib:CreateInterface("Animatronic Nights", "ESP & Automation Suite", "", "bottom left", "cyber", 0.25)
 
 local espTab = int:CreateTab("ESP", "Visual Trackers", "eye", true)
+local autoTab = int:CreateTab("Automation", "Auto Fix & Fuse Utilities", "misc")
 local settingsTab = int:CreateTab("Settings", "UI Customization", "misc")
 
 -- Configuration State
@@ -36,6 +37,8 @@ local Config = {
     PlayerEsp = false,
     AnimatronicEsp = false,
     ItemEsp = false,
+    AutoInsertRods = false,
+    AutoInsertRadius = 15, -- Studs range for auto-inserting
     FillTransparency = 0.2, -- Solid vibrant fill
     OutlineTransparency = 1 -- NO stroke outline clutter!
 }
@@ -60,7 +63,63 @@ local function createHighlight(adornee, color, name)
 end
 
 -- --------------------------------------------------------------------
--- 1. PLAYER ESP (GREEN)
+-- 1. AUTOMATION: AUTO-INSERT GREEN RODS INTO FUSE BOX
+-- --------------------------------------------------------------------
+local function fireProximityPrompt(prompt)
+    if not prompt or not prompt:IsA("ProximityPrompt") then return end
+    pcall(function()
+        if fireproximityprompt then
+            fireproximityprompt(prompt)
+        else
+            -- Fallback: Trigger input directly
+            prompt:InputHoldBegin()
+            task.wait(prompt.HoldDuration or 0.1)
+            prompt:InputHoldEnd()
+        end
+    end)
+end
+
+-- Loop to check nearby Fuse Boxes / Electrical Panels and auto-insert Green Rods
+task.spawn(function()
+    while true do
+        task.wait(0.2)
+        if Config.AutoInsertRods then
+            pcall(function()
+                local char = LocalPlayer.Character
+                local hrp = char and char:FindFirstChild("HumanoidRootPart")
+                if not hrp then return end
+
+                for _, descendant in ipairs(Workspace:GetDescendants()) do
+                    if not Config.AutoInsertRods then break end
+
+                    if descendant:IsA("ProximityPrompt") then
+                        local actionText = descendant.ActionText:lower()
+                        local objectText = descendant.ObjectText:lower()
+
+                        -- Match Fuse Box / Green Rod insertion prompts
+                        if actionText:find("insert") or actionText:find("rod") or actionText:find("fuse") or actionText:find("fix") or
+                           objectText:find("fuse") or objectText:find("box") or objectText:find("rod") or objectText:find("sicherung") then
+                            
+                            local parentPart = descendant.Parent
+                            if parentPart and parentPart:IsA("BasePart") then
+                                local dist = (hrp.Position - parentPart.Position).Magnitude
+                                if dist <= Config.AutoInsertRadius then
+                                    fireProximityPrompt(descendant)
+                                    lib:Notify("Auto-Insert", "Inserted Green Rod into Fuse Box!", 1.5)
+                                    task.wait(0.3)
+                                end
+                            end
+                        end
+                    end
+                end
+            end)
+        end
+    end
+end)
+
+
+-- --------------------------------------------------------------------
+-- 2. PLAYER ESP (GREEN)
 -- --------------------------------------------------------------------
 local function applyPlayerESP(player)
     if player == LocalPlayer then return end
@@ -95,21 +154,17 @@ local function refreshPlayerESP()
 end
 
 -- --------------------------------------------------------------------
--- 2. ANIMATRONIC / KILLER ESP (RED - HIGH RELIABILITY SCANNER)
+-- 3. ANIMATRONIC / KILLER ESP (RED)
 -- --------------------------------------------------------------------
 local function isAnimatronicKiller(obj)
     if not obj then return false end
-
-    -- Must be a Model or Character
     if not (obj:IsA("Model") or obj:IsA("Folder")) then return false end
 
     local name = obj.Name:lower()
     local parentName = obj.Parent and obj.Parent.Name:lower() or ""
 
-    -- Skip players
     if Players:GetPlayerFromCharacter(obj) then return false end
 
-    -- Check known animatronic / killer model names or folder containers
     if name:find("animatronic") or name:find("killer") or name:find("monster") or 
        name:find("bot") or name:find("npc") or name:find("freddy") or 
        name:find("bonnie") or name:find("chica") or name:find("foxy") or 
@@ -120,10 +175,8 @@ local function isAnimatronicKiller(obj)
         return true
     end
 
-    -- Check if model has a Humanoid or AnimationController but is not a human player
     local hum = obj:FindFirstChildOfClass("Humanoid") or obj:FindFirstChildOfClass("AnimationController")
     if hum and not Players:GetPlayerFromCharacter(obj) then
-        -- Check if it has body parts or is an active mob
         if obj:FindFirstChild("HumanoidRootPart") or obj:FindFirstChild("Head") or obj:FindFirstChild("Torso") then
             return true
         end
@@ -151,20 +204,18 @@ local function scanAnimatronics()
 end
 
 -- --------------------------------------------------------------------
--- 3. GREEN RODS & FUSE BOX ESP ONLY (ORANGE SOLID FILL)
+-- 4. GREEN RODS & FUSE BOX ESP ONLY (ORANGE SOLID FILL)
 -- --------------------------------------------------------------------
 local function isGreenRodOrFuseBox(obj)
     if not obj then return false end
     local name = obj.Name:lower()
 
-    -- Strictly match ONLY Green Rods / Stäbchen and Fuse Boxes / Sicherungskasten
     if name:find("green") or name:find("rod") or name:find("stäbchen") or 
        name:find("fusebox") or name:find("fuse_box") or name:find("sicherung") or 
        name:find("fuse box") or (name:find("fuse") and name:find("box")) then
         return true
     end
 
-    -- Check ProximityPrompts for Fuse Box / Green Rod interaction text
     for _, child in ipairs(obj:GetChildren()) do
         if child:IsA("ProximityPrompt") then
             local action = child.ActionText:lower()
@@ -203,12 +254,8 @@ end
 -- Real-Time Event Listener for Instant ESP on New Objects
 Workspace.DescendantAdded:Connect(function(descendant)
     task.wait(0.05)
-    if Config.AnimatronicEsp then
-        checkAndHighlightAnimatronic(descendant)
-    end
-    if Config.ItemEsp then
-        checkAndHighlightItem(descendant)
-    end
+    if Config.AnimatronicEsp then checkAndHighlightAnimatronic(descendant) end
+    if Config.ItemEsp then checkAndHighlightItem(descendant) end
 end)
 
 Workspace.DescendantRemoving:Connect(function(descendant)
@@ -289,7 +336,26 @@ end)
 
 
 -- --------------------------------------------------------------------
--- UI TAB 2: UI SETTINGS & TRANSPARENCY
+-- UI TAB 2: AUTOMATION CONTROLS (AUTO-INSERT GREEN RODS)
+-- --------------------------------------------------------------------
+autoTab:CreateComment("--- Fuse Box Automation ---")
+
+autoTab:CreateToggleSwitch("Auto-Insert Green Rods into Fuse Box", false, function(val)
+    Config.AutoInsertRods = val
+    if val then
+        lib:Notify("Automation", "Auto-Insert Green Rods Active!", 2.0)
+    else
+        lib:Notify("Automation", "Auto-Insert Stopped.", 1.5)
+    end
+end)
+
+autoTab:CreateSlider("Auto-Insert Range (Studs)", 5, 40, 15, function(val)
+    Config.AutoInsertRadius = val
+end)
+
+
+-- --------------------------------------------------------------------
+-- UI TAB 3: UI SETTINGS & TRANSPARENCY
 -- --------------------------------------------------------------------
 local themeDrop = settingsTab:CreateDropDown("Select UI Theme", function() end)
 local themesList = {"cyber", "emerald", "royal", "dark", "midnight", "blood", "gold", "neon"}
@@ -303,4 +369,4 @@ settingsTab:CreateSlider("Window Transparency", 0, 90, 25, function(val)
     int:SetTransparency(val / 100)
 end)
 
-print("[Animatronic Nights] Solid ESP Suite Loaded!")
+print("[Animatronic Nights] Automation & ESP Suite Loaded!")
