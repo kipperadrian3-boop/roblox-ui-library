@@ -634,4 +634,5 @@ settingsTab:CreateSlider("Window Transparency", 0, 90, 25, function(val)
     int:SetTransparency(val / 100)
 end)
 
+lib:Notify("Grow a Garden Suite", "Loaded successfully! Press 'K' to hide or show GUI.", 5.0)
 print("[Grow a Garden Suite] Official 1-to-1 Deobfuscated Interface Loaded Successfully!")

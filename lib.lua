@@ -146,6 +146,27 @@ local function loadJSON(title)
     return result
 end
 
+local function getParentGui()
+    if gethui then
+        local success, res = pcall(gethui)
+        if success and res then return res end
+    end
+
+    local testOk = pcall(function()
+        local t = Instance.new("ScreenGui")
+        t.Name = "TestParentGui"
+        t.Parent = CoreGui
+        t:Destroy()
+    end)
+    if testOk then
+        return CoreGui
+    end
+
+    local pgui = Players.LocalPlayer and (Players.LocalPlayer:FindFirstChild("PlayerGui") or Players.LocalPlayer:WaitForChild("PlayerGui", 3))
+    if pgui then return pgui end
+    return CoreGui
+end
+
 local function create(instanceType, properties)
     local inst = Instance.new(instanceType)
     for prop, val in pairs(properties) do
@@ -154,7 +175,14 @@ local function create(instanceType, properties)
         end
     end
     if properties.Parent then
-        inst.Parent = properties.Parent
+        local ok = pcall(function()
+            inst.Parent = properties.Parent
+        end)
+        if not ok and Players.LocalPlayer and Players.LocalPlayer:FindFirstChild("PlayerGui") then
+            pcall(function()
+                inst.Parent = Players.LocalPlayer.PlayerGui
+            end)
+        end
     end
     return inst
 end
@@ -164,13 +192,7 @@ local NotificationContainer = nil
 
 function Library:Notify(title, message, duration, icon)
     duration = duration or 3.5
-
-    local parentGui = CoreGui
-    pcall(function()
-        if not CoreGui:FindFirstChildOfClass("ScreenGui") then
-            parentGui = Players.LocalPlayer:WaitForChild("PlayerGui")
-        end
-    end)
+    local parentGui = getParentGui()
 
     if not NotificationContainer or not NotificationContainer.Parent then
         local notifGui = parentGui:FindFirstChild("LibraryNotificationGui") or create("ScreenGui", {
@@ -257,12 +279,7 @@ function Library:CreateInterface(titleText, descText, discordLink, position, the
     local theme = DefaultThemes[themeKey] or DefaultThemes.royal
     local glassTransparency = bgTransparency or 0.25
 
-    local parentGui = CoreGui
-    pcall(function()
-        if not CoreGui:FindFirstChildOfClass("ScreenGui") then
-            parentGui = Players.LocalPlayer:WaitForChild("PlayerGui")
-        end
-    end)
+    local parentGui = getParentGui()
 
     -- Clean up ALL previous instances in both CoreGui and PlayerGui
     pcall(function()
@@ -285,6 +302,7 @@ function Library:CreateInterface(titleText, descText, discordLink, position, the
     local ScreenGui = create("ScreenGui", {
         Name = "AdminSuiteUI",
         ResetOnSpawn = false,
+        Enabled = true,
         ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
         Parent = parentGui
     })
@@ -299,6 +317,7 @@ function Library:CreateInterface(titleText, descText, discordLink, position, the
         BorderSizePixel = 0,
         Active = true,
         Draggable = true,
+        Visible = true,
         Parent = ScreenGui
     })
 
