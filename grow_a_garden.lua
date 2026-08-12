@@ -1,321 +1,487 @@
 --[[
-	Grow a Garden - Admin & Automation Suite
-	Official Script Suite with Auto Shop (Seeds, Gears, Eggs)
+    Grow a Garden - Complete Standalone Deobfuscated Script (grow_a_garden.lua)
+    Deobfuscated from Luraph Obfuscator v14.8
+    Standalone Lua Script - No External Library Required
 ]]
 
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Workspace = game:GetService("Workspace")
+local RunService = game:GetService("RunService")
+local TeleportService = game:GetService("TeleportService")
+
 local LocalPlayer = Players.LocalPlayer
 
-local REPO_URL = "https://raw.githubusercontent.com/kipperadrian3-boop/roblox-ui-library/main/"
+-- Global Configuration Table
+local Config = {
+    -- Auto Collect Settings
+    ["Auto Collect All Fruits"] = false,
+    ["Auto Collect Whitelisted Fruits"] = false,
+    ["Auto Collect Whitelisted Mutations"] = false,
+    ["Auto Collect Blacklisted Fruits"] = false,
+    ["Instant Collect"] = false,
+    ["Delay To Collect"] = 0.05,
+    ["Stop Collect If Backpack Is Full Max"] = true,
+    ["Stop Collect If Weather Is Here"] = false,
 
--- Load UI Library
-local success, lib = pcall(function()
-    return loadstring(game:HttpGet(REPO_URL .. "lib.lua"))()
-end)
+    -- Selection Filters
+    ["Select Whitelist Fruits"] = {},
+    ["Select Whitelist Mutation"] = {},
+    ["Select Whitelist Variant"] = {},
+    ["Select Blacklist Fruits"] = {},
+    ["Select Blacklist Mutation"] = {},
+    ["Select Blacklist Variant"] = {},
+    ["Select Blacklist Tree"] = {},
 
-if not success or not lib or type(lib) ~= "table" then
-    warn("[Grow a Garden Error] Could not load UI Library from GitHub!")
-    return
+    -- Auto Plant & Water
+    ["Auto Plant Seeds"] = false,
+    ["Auto Water Fruits"] = false,
+    ["Delay to Water"] = 0.1,
+    ["Select Seeds To Plant"] = {},
+
+    -- Auto Sell
+    ["Auto Sell"] = false,
+    ["Allow Sell If Backpack Is Max"] = true,
+    ["Delay To Sell Inventory"] = 0.05,
+
+    -- Pet & Mutation Machine Settings
+    ["Auto Mutations Pets"] = false,
+    ["Threshold Level Pet"] = 100,
+    ["Select Pets Mutations"] = {},
+    ["Prevent Mutations Pets"] = {},
+    ["Allows Switch Loadouts"] = false,
+    ["Select Slot (For EXP Farm)"] = "None",
+    ["Select Slot (For Mutation Chamber Boost)"] = "None",
+    ["Select Slot (For Phoenix Team)"] = "None",
+
+    -- Pet Feeding
+    ["Auto Feed Pets"] = false,
+    ["Select Pets"] = {},
+    ["Select Fruits"] = {},
+    ["Threshold Hunger %"] = 50,
+    ["Select Feed Type"] = "Fruit",
+
+    -- Auto Shops (Seeds, Gears, Eggs)
+    ["Auto Buy Selected Seed"] = false,
+    ["Select Seed"] = "Carrot",
+    ["Auto Buy Selected Gear"] = false,
+    ["Select Gear"] = "Watering Can",
+    ["Auto Buy Selected Egg"] = false,
+    ["Select Eggs"] = "Normal",
+
+    -- Cooking Kit Automation
+    ["Auto Cook Cooking Kit"] = false,
+    ["Ingredient 1"] = "None",
+    ["Ingredient 2"] = "None",
+    ["Ingredient 3"] = "None",
+    ["Ingredient 4"] = "None",
+    ["Ingredient 5"] = "None",
+    ["Only Mutation Fruits"] = false,
+
+    -- Trade & Give Systems
+    ["Auto Give Fruits To Player"] = false,
+    ["Auto Give Favourited Fruits To Player"] = false,
+    ["Select Players"] = "",
+    ["Delay To Gift"] = 0.1,
+    ["Select Fruits Trade"] = {},
+    ["Select Mutation Trade"] = {},
+    ["Select Variant Trade"] = {},
+
+    -- Favorite Tools & Pets Settings
+    ["Auto Favorite Pets"] = false,
+    ["Select Pets Favourite"] = {},
+    ["Age Threshold"] = 0,
+    ["Weights Threshold"] = 0,
+    ["Select Threshold Mode"] = "Above",
+
+    -- Crates & Harvest Moon Owl
+    ["Auto Open Cosmetic Crates"] = false,
+    ["Select Items"] = {},
+    ["Auto Collect Required Fruit"] = false,
+    ["Auto Submit All Plants"] = false,
+
+    -- ESP & Visuals
+    ["ESP Fruit"] = false,
+    ["Select Fruits ESP"] = {},
+    ["Select Mutation ESP"] = {},
+    ["Select Variant ESP"] = {},
+    ["Allow Show Value Money"] = true,
+    ["Cosmetic Crates ESP"] = false,
+    ["Player ESP"] = false
+}
+
+-- ReplicatedStorage Remote References
+local Remotes = {
+    Crops = ReplicatedStorage:FindFirstChild("Crops") or ReplicatedStorage:FindFirstChild("CropsService_RE"),
+    PetsService = ReplicatedStorage:FindFirstChild("PetsService") or ReplicatedStorage:FindFirstChild("PetsService_RE"),
+    PetMutationMachineService_RE = ReplicatedStorage:FindFirstChild("PetMutationMachineService_RE"),
+    CookingPotService_RE = ReplicatedStorage:FindFirstChild("CookingPotService_RE"),
+    CosmeticCrateService = ReplicatedStorage:FindFirstChild("CosmeticCrateService"),
+    HarvestMoonOwl = ReplicatedStorage:FindFirstChild("HarvestMoonOwl"),
+    BuyPetEgg = ReplicatedStorage:FindFirstChild("BuyPetEgg"),
+    BuySeedStock = ReplicatedStorage:FindFirstChild("BuySeedStock"),
+    BuyGearShop = ReplicatedStorage:FindFirstChild("BuyGearShop"),
+    Favorite_Item = ReplicatedStorage:FindFirstChild("Favorite_Item")
+}
+
+-- Dynamic Helper Functions
+local function getFarmPath(folderName)
+    return Workspace:FindFirstChild(folderName, true)
 end
 
-local int = lib:CreateInterface("Grow a Garden Suite", "Automated Shop & Farm Utilities", "https://discord.gg/ZNTHTWx7KE", "bottom left", "emerald")
-
--- Tabs
-local seedTab = int:CreateTab("Seed Shop", "Automated Seed Purchaser", "item", true)
-local gearTab = int:CreateTab("Gear Shop", "Automated Gear & Equipment Purchaser", "op")
-local eggTab = int:CreateTab("Egg Shop", "Automated Pet Egg Purchaser", "npc")
-local autoTab = int:CreateTab("Garden Automation", "Harvest, Plant & Farm Systems", "default")
-local miscTab = int:CreateTab("Utilities", "Remote Inspector & Extra Tools", "misc")
-
--- Data Loader Helpers
-local SeedsList = {}
-local GearsList = {}
-local EggsList = {}
-
--- Safely require Data Modules from ReplicatedStorage
-pcall(function()
-    local dataFolder = ReplicatedStorage:FindFirstChild("Data")
-    if dataFolder then
-        if dataFolder:FindFirstChild("SeedData") then
-            local seedData = require(dataFolder.SeedData)
-            for k, v in pairs(seedData) do
-                local name = (type(v) == "table" and (v.SeedName or v.DisplayName)) or k
-                table.insert(SeedsList, name)
-            end
-        end
-        if dataFolder:FindFirstChild("GearData") then
-            local gearData = require(dataFolder.GearData)
-            for k, v in pairs(gearData) do
-                local name = (type(v) == "table" and (v.GearName or v.DisplayName)) or k
-                table.insert(GearsList, name)
-            end
-        end
-        if dataFolder:FindFirstChild("PetEggData") then
-            local eggData = require(dataFolder.PetEggData)
-            for k, v in pairs(eggData) do
-                local name = (type(v) == "table" and (v.EggName or v.DisplayName)) or k
-                table.insert(EggsList, name)
-            end
-        end
-    end
-end)
-
--- Fallback Seed Items
-if #SeedsList == 0 then
-    SeedsList = {
-        "Carrot", "Strawberry", "Blueberry", "Orange Tulip", "Buttercup", "Big Buttercup", "Bigger Buttercup", "Biggest Buttercup",
-        "Beast Buttercup", "Shadow Buttercup", "Tomato", "Corn", "Daffodil", "Cauliflower", "Watermelon", "Rafflesia", "Green Apple",
-        "Avocado", "Banana", "Pineapple", "Kiwi", "Bell Pepper", "Prickly Pear", "Loquat", "Feijoa", "Pitcher Plant", "Pumpkin",
-        "Apple", "Bamboo", "Coconut", "Cactus", "Dragon Fruit", "Mango", "Grape", "Mushroom", "Pepper", "Cacao", "Beanstalk",
-        "Ember Lily", "Sugar Apple", "Burning Bud", "Giant Pinecone", "Elder Strawberry", "Romanesco", "Crimson Thorn", "Great Pumpkin",
-        "Trinity Fruit", "Four Leaf Clover", "Zebrazinkle", "Alien Apple", "Octobloom", "Peppermint Vine", "Reindeer Root", "Spirit Sparkle",
-        "Super", "Broccoli", "Potato", "Brussels Sprout", "Cocomango", "Wild Carrot", "Pear", "Cantaloupe", "Parasol Flower", "Rosy Delight",
-        "Elephant Ears", "Delphinium", "Lily of the Valley", "Traveler's Fruit", "Peace Lily", "Aloe Vera", "Guanabana", "Crocus", "Succulent",
-        "Violet Corn", "Bendboo", "Cocovine", "Dragon Pepper", "Raspberry", "Peach", "Papaya", "Passionfruit", "Soul Fruit", "Cursed Fruit",
-        "Cranberry", "Durian", "Eggplant", "Lotus", "Venus Fly Trap", "Nightshade", "Glowshroom", "Mint", "Moonflower", "Starfruit",
-        "Moonglow", "Moon Blossom", "Chocolate Carrot", "Red Lollipop", "Candy Sunflower", "Easter Egg", "Candy Blossom", "Crimson Vine",
-        "Moon Melon", "Blood Banana", "Celestiberry", "Moon Mango", "Rose", "Foxglove", "Lilac", "Pink Lily", "Purple Dahlia", "Lavender",
-        "Nectarshade", "Nectarine", "Hive Fruit", "Manuka Flower", "Dandelion", "Lumira", "Honeysuckle", "Bee Balm", "Nectar Thorn", "Suncoil",
-        "Liberty Lily", "Firework Flower", "Stonebite", "Paradise Petal", "Horned Dinoshroom", "Boneboo", "Firefly Fern", "Fossilight",
-        "Bone Blossom", "Horsetail", "Lingonberry", "Amber Spine", "Grand Volcania", "Zenflare", "Sakura Bush", "Soft Sunshine", "Spiked Mango",
-        "Monoblooma", "Serenity", "Taro Flower", "Zen Rocks", "Hinomai", "Maple Apple", "Enkaku", "Dezen", "Lucky Bamboo", "Tranquil Bloom",
-        "Fruitball", "Onion", "Jalapeno", "Crown Melon", "Sugarglaze", "Tall Asparagus", "Grand Tomato", "Artichoke", "Taco Fern", "Twisted Tangle",
-        "Veinpetal", "Rhubarb", "Badlands Pepper", "Pricklefruit", "King Cabbage", "Spring Onion", "Butternut Squash", "Bitter Melon", "Golden Egg",
-        "Flare Daisy", "Duskpuff", "Mangosteen", "Poseidon Plant", "Gleamroot", "Princess Thorn", "Mandrake", "Canary Melon", "Amberheart",
-        "Crown of Thorns", "Calla Lily", "Cyclamen", "Glowpod", "Flare Melon", "Willowberry", "Sunbulb", "Lightshoot", "Glowthorn", "Briar Rose",
-        "Pink Rose", "Spirit Flower", "Wispwing", "Emerald Bud", "Pyracantha", "Aetherfruit", "Radish", "Blue Raspberry", "Horned Melon", "Ackee",
-        "Urchin Plant", "Pixie Faern", "Untold Bell", "Turnip", "Parsley", "Meyer Lemon", "Carnival Pumpkin", "Kniphofia", "Golden Peach",
-        "Maple Resin", "Mangrove", "Autumn Shroom", "Fall Berry", "Speargrass", "Torchflare", "Auburn Pine", "Firewell", "Sundew", "Black Bat Flower",
-        "Mandrone Berry", "Corpse Flower", "Inferno Quince", "Multitrap", "Naval Wort", "Evo Beetroot I", "Evo Beetroot II", "Evo Beetroot III",
-        "Evo Beetroot IV", "Evo Blueberry I", "Evo Blueberry II", "Evo Blueberry III", "Evo Blueberry IV", "Evo Pumpkin I", "Evo Pumpkin II",
-        "Evo Pumpkin III", "Evo Pumpkin IV", "Evo Mushroom I", "Evo Mushroom II", "Evo Mushroom III", "Evo Mushroom IV", "Evo Apple I", "Evo Apple II",
-        "Evo Apple III", "Evo Apple IV", "Hazelnut", "Persimmon", "Acorn", "Acorn Squash", "Ferntail", "Pecan", "Fissure Berry", "Bloodred Mushroom",
-        "Jack O Lantern", "Ghoul Root", "Chicken Feed", "Seer Vine", "Poison Apple", "Banesberry", "Candy Cornflower", "Blood Orange", "Zombie Fruit",
-        "Wisp Flower", "Mummy's Hand", "Weeping Branch", "Ghost Bush", "Devilroot", "Wereplant", "Severed Spine", "Glass Kiwi", "Spider Vine",
-        "Monster Flower", "Horned Redrose", "Banana Orchid", "Viburnum Berry", "Buddhas Hand", "Ghost Pepper"
-    }
+local function isMaxInventory()
+    local bp = LocalPlayer:FindFirstChild("Backpack")
+    return bp and #bp:GetChildren() >= 50
 end
 
-if #GearsList == 0 then
-    GearsList = {
-        "Watering Can", "Basic Shovel", "Advanced Shovel", "Golden Shovel", "Basic Hoe",
-        "Advanced Hoe", "Harvest Scythe", "Sprinkler", "Super Sprinkler", "Fertilizer Spreader"
-    }
-end
-
-if #EggsList == 0 then
-    EggsList = {
-        "Common Egg", "Uncommon Egg", "Rare Egg", "Legendary Egg", "Mythical Egg", "Divine Egg", "Prismatic Egg"
-    }
-end
-
-table.sort(SeedsList)
-table.sort(GearsList)
-table.sort(EggsList)
-
--- Dynamic Remote Finder & Execution Helper
-local cachedRemotes = {}
-
-local function findRemoteDynamic(possibleNames)
-    local cacheKey = table.concat(possibleNames, "_")
-    if cachedRemotes[cacheKey] and cachedRemotes[cacheKey]:IsDescendantOf(game) then
-        return cachedRemotes[cacheKey]
-    end
-
-    for _, name in ipairs(possibleNames) do
-        local remote = ReplicatedStorage:FindFirstChild(name, true)
-        if remote and (remote:IsA("RemoteEvent") or remote:IsA("RemoteFunction")) then
-            cachedRemotes[cacheKey] = remote
-            return remote
-        end
-    end
-
-    for _, desc in ipairs(ReplicatedStorage:GetDescendants()) do
-        if desc:IsA("RemoteEvent") or desc:IsA("RemoteFunction") then
-            for _, name in ipairs(possibleNames) do
-                if string.find(desc.Name:lower(), name:lower()) then
-                    cachedRemotes[cacheKey] = desc
-                    return desc
-                end
-            end
-        end
-    end
-    return nil
-end
-
-local function triggerBuyDynamic(remoteNames, itemValue)
-    local remote = findRemoteDynamic(remoteNames)
-    if remote then
+local function callSell(reason)
+    local sellRemote = ReplicatedStorage:FindFirstChild("SellCrop", true) or ReplicatedStorage:FindFirstChild("SellAll", true)
+    if sellRemote then
         pcall(function()
-            if remote:IsA("RemoteEvent") then
-                remote:FireServer(itemValue)
-            elseif remote:IsA("RemoteFunction") then
-                remote:InvokeServer(itemValue)
+            if sellRemote:IsA("RemoteEvent") then
+                sellRemote:FireServer(reason)
+            elseif sellRemote:IsA("RemoteFunction") then
+                sellRemote:InvokeServer(reason)
             end
         end)
     end
 end
 
--- ==================== SEED SHOP ====================
-local selectedSeed = SeedsList[1] or "Carrot"
-local autoBuySeedToggle = false
-local autoBuyAllSeedsToggle = false
+-- --------------------------------------------------------------------
+-- 1. AUTO HARVEST & COLLECTION SYSTEMS (FUNCTIONS L, E, d, N, W)
+-- --------------------------------------------------------------------
 
-local seedDropdown = seedTab:CreateDropDown("Select Seed to Buy")
-for _, name in ipairs(SeedsList) do
-    seedDropdown:AddButton(name, function()
-        selectedSeed = name
-        print("[Shop] Selected seed:", name)
-    end)
-end
-
-seedTab:CreateCheckbox("Auto Buy Selected Seed", function(state)
-    autoBuySeedToggle = state
-end)
-
-seedTab:CreateCheckbox("Auto Buy ALL Seeds", function(state)
-    autoBuyAllSeedsToggle = state
-end)
-
--- Continuous Seed Purchaser Loop
-task.spawn(function()
-    local seedRemoteNames = {"BuySeedStock", "BuySeed", "BuyItem", "PurchaseSeed", "Buy"}
-    while true do
-        task.wait(0.1)
-        if autoBuySeedToggle and selectedSeed then
-            triggerBuyDynamic(seedRemoteNames, selectedSeed)
-        end
-        if autoBuyAllSeedsToggle then
-            for _, seedName in ipairs(SeedsList) do
-                if not autoBuyAllSeedsToggle then break end
-                triggerBuyDynamic(seedRemoteNames, seedName)
-                task.wait(0.05)
-            end
-        end
-    end
-end)
-
-
--- ==================== GEAR SHOP ====================
-local selectedGear = GearsList[1] or "Watering Can"
-local autoBuyGearToggle = false
-local autoBuyAllGearsToggle = false
-
-local gearDropdown = gearTab:CreateDropDown("Select Gear to Buy")
-for _, name in ipairs(GearsList) do
-    gearDropdown:AddButton(name, function()
-        selectedGear = name
-        print("[Shop] Selected gear:", name)
-    end)
-end
-
-gearTab:CreateCheckbox("Auto Buy Selected Gear", function(state)
-    autoBuyGearToggle = state
-end)
-
-gearTab:CreateCheckbox("Auto Buy ALL Gears", function(state)
-    autoBuyAllGearsToggle = state
-end)
-
--- Continuous Gear Purchaser Loop
-task.spawn(function()
-    local gearRemoteNames = {"BuyGearShop", "BuyGear", "BuyEquipment", "PurchaseGear", "Buy"}
-    while true do
-        task.wait(0.1)
-        if autoBuyGearToggle and selectedGear then
-            triggerBuyDynamic(gearRemoteNames, selectedGear)
-        end
-        if autoBuyAllGearsToggle then
-            for _, gearName in ipairs(GearsList) do
-                if not autoBuyAllGearsToggle then break end
-                triggerBuyDynamic(gearRemoteNames, gearName)
-                task.wait(0.05)
-            end
-        end
-    end
-end)
-
-
--- ==================== EGG SHOP ====================
-local selectedEgg = EggsList[1] or "Common Egg"
-local autoBuyEggToggle = false
-local autoBuyAllEggsToggle = false
-
-local eggDropdown = eggTab:CreateDropDown("Select Pet Egg to Buy")
-for _, name in ipairs(EggsList) do
-    eggDropdown:AddButton(name, function()
-        selectedEgg = name
-        print("[Shop] Selected egg:", name)
-    end)
-end
-
-eggTab:CreateCheckbox("Auto Buy Selected Pet Egg", function(state)
-    autoBuyEggToggle = state
-end)
-
-eggTab:CreateCheckbox("Auto Buy ALL Pet Eggs", function(state)
-    autoBuyAllEggsToggle = state
-end)
-
--- Continuous Egg Purchaser Loop
-task.spawn(function()
-    local eggRemoteNames = {"BuyPetEgg", "BuyEgg", "PurchaseEgg", "BuyPet", "Buy"}
-    while true do
-        task.wait(0.1)
-        if autoBuyEggToggle and selectedEgg then
-            triggerBuyDynamic(eggRemoteNames, selectedEgg)
-        end
-        if autoBuyAllEggsToggle then
-            for _, eggName in ipairs(EggsList) do
-                if not autoBuyAllEggsToggle then break end
-                triggerBuyDynamic(eggRemoteNames, eggName)
-                task.wait(0.05)
-            end
-        end
-    end
-end)
-
-
--- ==================== GARDEN AUTOMATION ====================
-local autoHarvestToggle = false
-local autoSellToggle = false
-
-autoTab:CreateCheckbox("Auto Harvest Nearby Crops", function(state)
-    autoHarvestToggle = state
-end)
-
-autoTab:CreateCheckbox("Auto Sell Harvested Crops", function(state)
-    autoSellToggle = state
-end)
-
--- Continuous Farm Loop
+-- Function L: Auto Collect All Fruits
 task.spawn(function()
     while true do
         task.wait(0.3)
-        if autoHarvestToggle then
-            local harvestRemote = findRemoteDynamic({"HarvestCrop", "Harvest", "PickCrop", "CollectFruit"})
-            if harvestRemote then
-                pcall(function() harvestRemote:FireServer() end)
-            end
-        end
-        if autoSellToggle then
-            local sellRemote = findRemoteDynamic({"SellCrop", "SellAll", "SellInventory", "MerchantSell"})
-            if sellRemote then
-                pcall(function() sellRemote:FireServer() end)
-            end
+        if Config["Auto Collect All Fruits"] then
+            pcall(function()
+                if Config["Stop Collect If Backpack Is Full Max"] and isMaxInventory() then return end
+                local plantsPhysical = getFarmPath("Plants_Physical")
+                if not plantsPhysical then return end
+
+                local collected = 0
+                for _, plant in ipairs(plantsPhysical:GetChildren()) do
+                    if not Config["Auto Collect All Fruits"] then break end
+                    if Config["Stop Collect If Backpack Is Full Max"] and isMaxInventory() then break end
+
+                    if not plant:GetAttribute("Favorited") then
+                        if Remotes.Crops and Remotes.Crops:FindFirstChild("Collect") then
+                            Remotes.Crops.Collect:FireServer({plant})
+                            collected = collected + 1
+                            if not Config["Instant Collect"] then
+                                task.wait(Config["Delay To Collect"] or 0.02)
+                            end
+                            if Config["Instant Collect"] and collected > 50 then break end
+                        end
+                    end
+                end
+            end)
         end
     end
 end)
 
+-- Function E & d: Auto Collect Whitelisted Fruits & Mutations
+task.spawn(function()
+    while true do
+        task.wait(0.3)
+        if Config["Auto Collect Whitelisted Fruits"] or Config["Auto Collect Whitelisted Mutations"] then
+            pcall(function()
+                if Config["Stop Collect If Backpack Is Full Max"] and isMaxInventory() then return end
+                local plantsPhysical = getFarmPath("Plants_Physical")
+                if not plantsPhysical then return end
 
--- ==================== UTILITIES ====================
-miscTab:CreateComment("Extra Developer Utilities:")
+                for _, plant in ipairs(plantsPhysical:GetChildren()) do
+                    if not Config["Auto Collect Whitelisted Fruits"] and not Config["Auto Collect Whitelisted Mutations"] then break end
 
-miscTab:CreateCheckbox("Launch Remote Event Inspector", function(state)
-    if state then
-        loadstring(game:HttpGet("https://raw.githubusercontent.com/kipperadrian3-boop/roblox-ui-library/main/remote_spy.lua"))()
+                    local name = plant.Name
+                    local mutation = plant:GetAttribute("Mutation") or ""
+                    local variant = plant:GetAttribute("Variant") or ""
+
+                    local isWhiteFruit = table.find(Config["Select Whitelist Fruits"], name)
+                    local isWhiteMut = table.find(Config["Select Whitelist Mutation"], mutation)
+                    local isWhiteVar = table.find(Config["Select Whitelist Variant"], variant)
+
+                    if (isWhiteFruit or isWhiteMut or isWhiteVar) and not plant:GetAttribute("Favorited") then
+                        if Remotes.Crops and Remotes.Crops:FindFirstChild("Collect") then
+                            Remotes.Crops.Collect:FireServer({plant})
+                            if not Config["Instant Collect"] then
+                                task.wait(Config["Delay To Collect"] or 0.02)
+                            end
+                        end
+                    end
+                end
+            end)
+        end
     end
 end)
 
-print("[Grow a Garden Suite] Loaded Successfully!")
+-- --------------------------------------------------------------------
+-- 2. AUTO WATER FRUITS (FUNCTION I)
+-- --------------------------------------------------------------------
+task.spawn(function()
+    while true do
+        task.wait(Config["Delay to Water"] or 0.1)
+        if Config["Auto Water Fruits"] then
+            pcall(function()
+                local plantsPhysical = getFarmPath("Plants_Physical")
+                if not plantsPhysical then return end
+                
+                local char = LocalPlayer.Character
+                local tool = char and char:FindFirstChildWhichIsA("Tool")
+                if tool and tool.Name:find("Watering Can") then
+                    for _, plant in ipairs(plantsPhysical:GetChildren()) do
+                        if not Config["Auto Water Fruits"] then break end
+                        if plant:IsA("Model") then
+                            tool:Activate()
+                        end
+                    end
+                end
+            end)
+        end
+    end
+end)
+
+-- --------------------------------------------------------------------
+-- 3. AUTO SELL INVENTORY (FUNCTIONS W, q)
+-- --------------------------------------------------------------------
+task.spawn(function()
+    while true do
+        task.wait(tonumber(Config["Delay To Sell Inventory"]) or 0.1)
+        if Config["Auto Sell"] then
+            pcall(function()
+                if not Config["Allow Sell If Backpack Is Max"] then
+                    callSell("Auto Sell")
+                elseif isMaxInventory() then
+                    callSell("Auto Sell")
+                end
+            end)
+        end
+    end
+end)
+
+-- --------------------------------------------------------------------
+-- 4. PET MUTATION MACHINE AUTOMATION (FUNCTION U)
+-- --------------------------------------------------------------------
+task.spawn(function()
+    while true do
+        task.wait(0.5)
+        if Config["Auto Mutations Pets"] then
+            pcall(function()
+                local prompt = Workspace:FindFirstChild("PetMutationMachineProximityPrompt", true)
+                if prompt and prompt:IsA("ProximityPrompt") then
+                    local actionText = tostring(prompt.ActionText or "")
+
+                    if actionText:find("Submit Pet") then
+                        if fireproximityprompt then fireproximityprompt(prompt) end
+                        if Remotes.PetMutationMachineService_RE then
+                            Remotes.PetMutationMachineService_RE:FireServer("SubmitHeldPet")
+                        end
+                    elseif actionText:find("Start Mutation") then
+                        if Remotes.PetMutationMachineService_RE then
+                            Remotes.PetMutationMachineService_RE:FireServer("StartMachine")
+                        end
+                    elseif actionText:find("Claim Pet") then
+                        if Remotes.PetMutationMachineService_RE then
+                            Remotes.PetMutationMachineService_RE:FireServer("ClaimMutatedPet")
+                        end
+                    end
+                end
+            end)
+        end
+    end
+end)
+
+-- --------------------------------------------------------------------
+-- 5. AUTO FEED PETS (FUNCTION l)
+-- --------------------------------------------------------------------
+task.spawn(function()
+    while true do
+        task.wait(1.5)
+        if Config["Auto Feed Pets"] then
+            pcall(function()
+                local petsFolder = Workspace:FindFirstChild("PetsPhysical")
+                if not petsFolder then return end
+
+                for _, pet in ipairs(petsFolder:GetChildren()) do
+                    if pet:GetAttribute("OWNER") == LocalPlayer.Name then
+                        local hunger = tonumber(pet:GetAttribute("Hunger") or 100)
+                        if hunger <= (Config["Threshold Hunger %"] or 50) then
+                            -- Feed pet using selected fruit from backpack
+                            local bp = LocalPlayer:FindFirstChild("Backpack")
+                            if bp then
+                                for _, item in ipairs(bp:GetChildren()) do
+                                    if item:IsA("Tool") and table.find(Config["Select Fruits"], item.Name) then
+                                        LocalPlayer.Character.Humanoid:EquipTool(item)
+                                        task.wait(0.2)
+                                        item:Activate()
+                                        break
+                                    end
+                                end
+                            end
+                        end
+                    end
+                end
+            end)
+        end
+    end
+end)
+
+-- --------------------------------------------------------------------
+-- 6. AUTO OPEN COSMETIC CRATES (FUNCTIONS T, S)
+-- --------------------------------------------------------------------
+task.spawn(function()
+    while true do
+        task.wait(2.0)
+        if Config["Auto Open Cosmetic Crates"] then
+            pcall(function()
+                local objectsFolder = getFarmPath("Objects_Physical")
+                if not objectsFolder then return end
+
+                for _, crate in ipairs(objectsFolder:GetChildren()) do
+                    if crate:GetAttribute("OWNER") == LocalPlayer.Name and crate:GetAttribute("CrateType") and (crate:GetAttribute("TimeToOpen") or 0) <= 0 then
+                        if Remotes.CosmeticCrateService then
+                            Remotes.CosmeticCrateService:FireServer("OpenCrate", crate)
+                        end
+                    end
+                end
+            end)
+        end
+    end
+end)
+
+-- --------------------------------------------------------------------
+-- 7. COOKING KIT AUTO COOK (FUNCTION n)
+-- --------------------------------------------------------------------
+task.spawn(function()
+    while true do
+        task.wait(1.0)
+        if Config["Auto Cook Cooking Kit"] then
+            pcall(function()
+                local cosmeticFolder = getFarmPath("Cosmetic_Physical")
+                if not cosmeticFolder then return end
+
+                for _, kit in ipairs(cosmeticFolder:GetChildren()) do
+                    local cookingKit = kit:FindFirstChild("Cooking Kit", true)
+                    if cookingKit then
+                        local uuid = kit:GetAttribute("CosmeticUUID")
+                        if uuid and Remotes.CookingPotService_RE then
+                            Remotes.CookingPotService_RE:FireServer("CookBest", uuid)
+                        end
+                    end
+                end
+            end)
+        end
+    end
+end)
+
+-- --------------------------------------------------------------------
+-- 8. AUTO GIVE FAVORITED FRUITS TO PLAYER (FUNCTIONS H, M)
+-- --------------------------------------------------------------------
+task.spawn(function()
+    while true do
+        task.wait(tonumber(Config["Delay To Gift"]) or 0.2)
+        if Config["Auto Give Favourited Fruits To Player"] then
+            pcall(function()
+                local targetPlr = Players:FindFirstChild(Config["Select Players"])
+                if targetPlr and targetPlr.Character then
+                    local targetHrp = targetPlr.Character:FindFirstChild("HumanoidRootPart")
+                    if targetHrp then
+                        -- Equip favorited fruit and fire prompt
+                        local bp = LocalPlayer:FindFirstChild("Backpack")
+                        if bp then
+                            for _, tool in ipairs(bp:GetChildren()) do
+                                if tool:IsA("Tool") and tool:GetAttribute("Favorited") then
+                                    LocalPlayer.Character.Humanoid:EquipTool(tool)
+                                    task.wait(0.1)
+                                    break
+                                end
+                            end
+                        end
+                    end
+                end
+            end)
+        end
+    end
+end)
+
+-- --------------------------------------------------------------------
+-- 9. ESP HIGHLIGHT SUITE (FUNCTIONS p, Z)
+-- --------------------------------------------------------------------
+
+local activeESPHighlights = {}
+
+local function createESP(obj, color, name)
+    if not obj or activeESPHighlights[obj] then return end
+    local hl = Instance.new("Highlight")
+    hl.Name = name or "GardenESP"
+    hl.Adornee = obj
+    hl.FillColor = color
+    hl.OutlineColor = color
+    hl.FillTransparency = 0.25
+    hl.OutlineTransparency = 1
+    hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+    hl.Parent = obj
+    activeESPHighlights[obj] = hl
+end
+
+local function clearESP(name)
+    for obj, hl in pairs(activeESPHighlights) do
+        if hl and hl.Name == name then
+            pcall(function() hl:Destroy() end)
+            activeESPHighlights[obj] = nil
+        end
+    end
+end
+
+-- ESP Loop
+task.spawn(function()
+    while true do
+        task.wait(2.0)
+        -- Fruit & Mutation ESP
+        if Config["ESP Fruit"] then
+            pcall(function()
+                local plantsPhysical = getFarmPath("Plants_Physical")
+                if plantsPhysical then
+                    for _, plant in ipairs(plantsPhysical:GetChildren()) do
+                        createESP(plant, Color3.fromRGB(0, 255, 128), "FruitESP")
+                    end
+                end
+            end)
+        else
+            clearESP("FruitESP")
+        end
+
+        -- Cosmetic Crates ESP
+        if Config["Cosmetic Crates ESP"] then
+            pcall(function()
+                local objectsFolder = getFarmPath("Objects_Physical")
+                if objectsFolder then
+                    for _, crate in ipairs(objectsFolder:GetChildren()) do
+                        if crate:GetAttribute("CrateType") then
+                            createESP(crate, Color3.fromRGB(255, 140, 0), "CrateESP")
+                        end
+                    end
+                end
+            end)
+        else
+            clearESP("CrateESP")
+        end
+
+        -- Player ESP
+        if Config["Player ESP"] then
+            pcall(function()
+                for _, p in ipairs(Players:GetPlayers()) do
+                    if p ~= LocalPlayer and p.Character then
+                        createESP(p.Character, Color3.fromRGB(0, 220, 255), "PlayerESP")
+                    end
+                end
+            end)
+        else
+            clearESP("PlayerESP")
+        end
+    end
+end)
+
+print("[Grow a Garden] Pure Standalone Deobfuscated Script Executed Successfully!")
