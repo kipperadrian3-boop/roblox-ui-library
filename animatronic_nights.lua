@@ -1,10 +1,11 @@
 --[[
-    Animatronic Nights - Dedicated Game ESP Suite (animatronic_nights.lua)
-    Features:
-      - Player ESP (GREEN Highlight ONLY for human players, excluding Killer player character)
-      - Killer ESP (RED Solid Highlight for Animatronic Monster/Killer in workspace)
-      - Green Rods & Fuse Box ESP (ORANGE Solid Fill ONLY for Green Rods & Fuse Boxes)
-      - Universal JSON Auto-Save via lib.lua
+    Animatronic Nights - Dedicated Game ESP & Automation Suite (animatronic_nights.lua)
+    Official Fixes:
+      - Green Rods & Fuse Box ESP: Highlights ALL Green Rods (Pickup Items) AND Fuse Boxes in solid ORANGE (No outline stroke clutter)
+      - Animatronic Monster/Killer ESP: Solid RED Highlight for Animatronic Monster/Killer
+      - Player ESP: Solid GREEN Highlight for human Night Guard players
+      - Auto-Insert Automation: ONLY triggers proximity prompts on Fuse Boxes / Sicherungskästen (Insert/Fix/Repair)
+        and STRICTLY EXCLUDES pickup prompts (Take/Grab/Pick up Green Rods) so players can freely pick up green rods!
 ]]
 
 local Players = game:GetService("Players")
@@ -24,8 +25,8 @@ if not success or not lib or type(lib) ~= "table" then
     return
 end
 
--- Create Interface with Cyber Blue Theme
-local int = lib:CreateInterface("Animatronic Nights", "ESP & Automation Suite", "", "bottom left", "cyber", 0.25)
+-- Create Interface with Cyber Theme
+local int = lib:CreateInterface("Animatronic Nights", "ESP & Fuse Automation Suite", "", "bottom left", "cyber", 0.25)
 
 local espTab = int:CreateTab("ESP", "Visual Trackers", "eye", true)
 local autoTab = int:CreateTab("Automation", "Auto Fix & Fuse Utilities", "misc")
@@ -67,7 +68,6 @@ local function isPlayerKiller(player)
     local char = player.Character
     local name = char.Name:lower()
 
-    -- Check if character name or team indicates Animatronic / Killer
     if name:find("animatronic") or name:find("killer") or name:find("monster") or 
        name:find("freddy") or name:find("bonnie") or name:find("chica") or name:find("foxy") then
         return true
@@ -81,8 +81,40 @@ local function isPlayerKiller(player)
 end
 
 -- --------------------------------------------------------------------
--- 1. AUTOMATION: AUTO-INSERT GREEN RODS INTO FUSE BOX
+-- 1. AUTOMATION: AUTO-INSERT GREEN RODS ONLY INTO FUSE BOXES
 -- --------------------------------------------------------------------
+
+-- Check if a ProximityPrompt belongs ONLY to a Fuse Box / Sicherungskasten (NOT a pickup prompt)
+local function isFuseBoxPrompt(prompt)
+    if not prompt or not prompt:IsA("ProximityPrompt") then return false end
+
+    local action = prompt.ActionText:lower()
+    local objectText = prompt.ObjectText:lower()
+
+    local parent = prompt.Parent
+    local model = parent and parent:FindFirstAncestorOfClass("Model")
+    local parentName = parent and parent.Name:lower() or ""
+    local modelName = model and model.Name:lower() or ""
+
+    -- 1. EXCLUDE Pickup / Item Collection Prompts (So player can manually pick up Green Rods)
+    if action:find("take") or action:find("grab") or action:find("pick") or action:find("collect") or 
+       action:find("aufnehmen") or action:find("einsammeln") or action:find("hold") or action:find("get") or
+       objectText:find("take") or objectText:find("grab") or objectText:find("pick") then
+        return false
+    end
+
+    -- 2. INCLUDE Fuse Box / Sicherungskasten Interaction Prompts
+    if action:find("insert") or action:find("repair") or action:find("fix") or action:find("place") or 
+       action:find("put") or action:find("install") or action:find("sicherung") or
+       objectText:find("fuse") or objectText:find("sicherung") or objectText:find("box") or objectText:find("panel") or
+       parentName:find("fuse") or parentName:find("sicherung") or parentName:find("box") or parentName:find("panel") or
+       modelName:find("fuse") or modelName:find("sicherung") or modelName:find("box") or modelName:find("panel") then
+        return true
+    end
+
+    return false
+end
+
 local function fireProximityPrompt(prompt)
     if not prompt or not prompt:IsA("ProximityPrompt") then return end
     pcall(function()
@@ -108,7 +140,7 @@ task.spawn(function()
                 for _, descendant in ipairs(Workspace:GetDescendants()) do
                     if not Config.AutoInsertRods then break end
 
-                    if descendant:IsA("ProximityPrompt") then
+                    if descendant:IsA("ProximityPrompt") and isFuseBoxPrompt(descendant) then
                         local parentPart = descendant.Parent
                         if parentPart and parentPart:IsA("BasePart") then
                             local dist = (hrp.Position - parentPart.Position).Magnitude
@@ -139,7 +171,6 @@ local function applyPlayerESP(player)
         end
         if not Config.PlayerEsp then return end
 
-        -- If this player is the Animatronic Killer, do NOT apply green ESP
         if isPlayerKiller(player) then
             return
         end
@@ -165,8 +196,9 @@ local function refreshPlayerESP()
     end
 end
 
+
 -- --------------------------------------------------------------------
--- 3. ANIMATRONIC / KILLER ESP (RED - HIGH SENSITIVITY SCANNER)
+-- 3. ANIMATRONIC / KILLER ESP (RED SOLID HIGHLIGHT)
 -- --------------------------------------------------------------------
 local function isAnimatronicKiller(obj)
     if not obj then return false end
@@ -175,7 +207,6 @@ local function isAnimatronicKiller(obj)
     local name = obj.Name:lower()
     local parentName = obj.Parent and obj.Parent.Name:lower() or ""
 
-    -- 1. Check if a human player is playing as the Killer
     local plr = Players:GetPlayerFromCharacter(obj)
     if plr then
         if isPlayerKiller(plr) then
@@ -184,7 +215,6 @@ local function isAnimatronicKiller(obj)
         return false
     end
 
-    -- 2. Check NPC / Monster models in Workspace
     if name:find("animatronic") or name:find("killer") or name:find("monster") or 
        name:find("bot") or name:find("npc") or name:find("freddy") or 
        name:find("bonnie") or name:find("chica") or name:find("foxy") or 
@@ -196,7 +226,6 @@ local function isAnimatronicKiller(obj)
         return true
     end
 
-    -- 3. Check Workspace models containing a Humanoid that are NOT normal players
     local hum = obj:FindFirstChildOfClass("Humanoid") or obj:FindFirstChildOfClass("AnimationController")
     if hum then
         if obj:FindFirstChild("HumanoidRootPart") or obj:FindFirstChild("Head") or obj:FindFirstChild("Torso") then
@@ -225,33 +254,52 @@ local function scanAnimatronics()
     end
 end
 
+
 -- --------------------------------------------------------------------
--- 4. GREEN RODS & FUSE BOX ESP ONLY (ORANGE SOLID FILL)
+-- 4. GREEN RODS & FUSE BOX ESP (ORANGE SOLID FILL)
 -- --------------------------------------------------------------------
 local function isGreenRodOrFuseBox(obj)
     if not obj then return false end
     if obj == Workspace or obj:IsA("Terrain") then return false end
 
-    -- Skip players and killers
+    -- Skip players and animatronics
     if Players:GetPlayerFromCharacter(obj) or isAnimatronicKiller(obj) then return false end
 
     local name = obj.Name:lower()
 
-    -- Strict match for Green Rods / Stäbchen and Fuse Boxes
-    if name:find("green") or name:find("rod") or name:find("stäbchen") or 
+    -- 1. Check Model / Part / Tool / Folder Name for Green Rod or Fuse Box
+    if name:find("green") or name:find("rod") or name:find("stäbchen") or name:find("stab") or
        name:find("fusebox") or name:find("fuse_box") or name:find("sicherung") or 
        name:find("fuse box") or (name:find("fuse") and name:find("box")) or
        name:find("power") or name:find("battery") or name:find("panel") then
         return true
     end
 
-    -- Check ProximityPrompts for Green Rod / Fuse Box action text
-    for _, child in ipairs(obj:GetChildren()) do
-        if child:IsA("ProximityPrompt") then
-            local action = child.ActionText:lower()
-            local objectText = child.ObjectText:lower()
-            if action:find("rod") or action:find("green") or action:find("fuse") or action:find("insert") or 
-               objectText:find("rod") or objectText:find("green") or objectText:find("fuse") or objectText:find("sicherung") then
+    -- 2. Check Recursive ProximityPrompts (Action & ObjectText)
+    local prompt = obj:FindFirstChildWhichIsA("ProximityPrompt", true)
+    if prompt then
+        local action = prompt.ActionText:lower()
+        local objectText = prompt.ObjectText:lower()
+        if action:find("rod") or action:find("green") or action:find("fuse") or action:find("insert") or 
+           action:find("take") or action:find("grab") or action:find("pick") or action:find("collect") or
+           objectText:find("rod") or objectText:find("green") or objectText:find("fuse") or objectText:find("sicherung") or objectText:find("stäbchen") then
+            return true
+        end
+    end
+
+    -- 3. Check Tools in Workspace or Backpack
+    if obj:IsA("Tool") then
+        local tName = obj.Name:lower()
+        if tName:find("green") or tName:find("rod") or tName:find("fuse") or tName:find("stäbchen") then
+            return true
+        end
+    end
+
+    -- 4. Check Green BrickColor Parts (Ground Items)
+    if obj:IsA("BasePart") or obj:IsA("MeshPart") then
+        local bcName = obj.BrickColor.Name:lower()
+        if bcName:find("green") or bcName:find("lime") then
+            if obj.Size.Magnitude < 35 then
                 return true
             end
         end
@@ -280,7 +328,7 @@ local function scanItems()
     end
 end
 
--- Real-Time Event Listener for Instant ESP on New Objects
+-- Event Listeners for Instant Highlight on Spawning Objects
 Workspace.DescendantAdded:Connect(function(descendant)
     task.wait(0.05)
     if Config.AnimatronicEsp then checkAndHighlightAnimatronic(descendant) end
@@ -372,7 +420,7 @@ autoTab:CreateComment("--- Fuse Box Automation ---")
 autoTab:CreateToggleSwitch("Auto-Insert Green Rods into Fuse Box", false, function(val)
     Config.AutoInsertRods = val
     if val then
-        lib:Notify("Automation", "Auto-Insert Green Rods Active!", 2.0)
+        lib:Notify("Automation", "Auto-Insert Green Rods Active! (Fuse Boxes Only)", 2.0)
     else
         lib:Notify("Automation", "Auto-Insert Stopped.", 1.5)
     end
@@ -398,4 +446,5 @@ settingsTab:CreateSlider("Window Transparency", 0, 90, 25, function(val)
     int:SetTransparency(val / 100)
 end)
 
-print("[Animatronic Nights] Corrected Animatronic & Player ESP Suite Loaded!")
+lib:Notify("Animatronic Nights", "Loaded successfully! Press 'K' to hide or show GUI.", 5.0)
+print("[Animatronic Nights] Corrected Animatronic & Green Rod ESP Suite Loaded Successfully!")
