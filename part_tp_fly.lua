@@ -3,6 +3,7 @@
 	Features:
 	  - Interactive Part Selection (Click any 3D object in world to select & highlight in blue/cyan)
 	  - Instant Teleportation to Selected Part with configurable height offset
+	  - Auto Teleport Loop (ON/OFF Toggle & Speed Slider 0.1s to 2.0s)
 	  - WASD Flight System with adjustable Fly Speed slider & Noclip
 	  - Custom UI Library (lib.lua) with Cyber Blue theme & Universal JSON Auto-Save
 ]]
@@ -44,7 +45,9 @@ local Config = {
     WalkSpeed = 16,
     JumpPower = 50,
     ClickSelectEnabled = false,
-    TeleportOffsetHeight = 3
+    TeleportOffsetHeight = 3,
+    AutoTpEnabled = false,
+    AutoTpDelay = 0.5 -- In seconds (0.1 to 2.0)
 }
 
 local selectedPart = nil
@@ -119,7 +122,30 @@ end
 
 
 -- --------------------------------------------------------------------
--- 2. FLY & NOCLIP & MOVEMENT SUITE
+-- 2. AUTO TELEPORT LOOP
+-- --------------------------------------------------------------------
+
+task.spawn(function()
+    while true do
+        task.wait(Config.AutoTpDelay or 0.5)
+        if Config.AutoTpEnabled then
+            pcall(function()
+                if selectedPart and selectedPart:IsA("BasePart") then
+                    local char = LocalPlayer.Character
+                    local hrp = char and char:FindFirstChild("HumanoidRootPart")
+                    if hrp then
+                        local targetPos = selectedPart.Position + Vector3.new(0, Config.TeleportOffsetHeight or 3, 0)
+                        hrp.CFrame = CFrame.new(targetPos)
+                    end
+                end
+            end)
+        end
+    end
+end)
+
+
+-- --------------------------------------------------------------------
+-- 3. FLY & NOCLIP & MOVEMENT SUITE
 -- --------------------------------------------------------------------
 
 local flyGyro, flyVel
@@ -214,7 +240,7 @@ selectedPartLabel.TextWrapped = true
 selectedPartLabel.TextXAlignment = Enum.TextXAlignment.Left
 selectedPartLabel.Parent = infoCard
 
--- Teleport Button
+-- Manual Teleport Button
 tpTab:CreateButton("TELEPORT TO SELECTED PART", function()
     if not selectedPart or not selectedPart:IsA("BasePart") then
         lib:Notify("Teleport Failed", "No part selected! Activate 'Click Part Selection Mode' and click a part first.", 3.0)
@@ -231,6 +257,21 @@ tpTab:CreateButton("TELEPORT TO SELECTED PART", function()
     local targetPos = selectedPart.Position + Vector3.new(0, Config.TeleportOffsetHeight or 3, 0)
     hrp.CFrame = CFrame.new(targetPos)
     lib:Notify("Teleport Success", "Teleported to " .. selectedPart.Name .. "!", 2.5)
+end)
+
+-- Auto Teleport Toggle & Interval Slider (0.1s to 2.0s)
+tpTab:CreateToggleSwitch("Auto Teleport to Selected Part", false, function(val)
+    Config.AutoTpEnabled = val
+    if val then
+        lib:Notify("Auto TP", "Auto Teleport Activated!", 2.0)
+    else
+        lib:Notify("Auto TP", "Auto Teleport Deactivated.", 1.5)
+    end
+end)
+
+-- Slider from 1 to 20 representing 0.1s to 2.0s
+tpTab:CreateSlider("Auto Teleport Speed (0.1s - 2.0s)", 1, 20, 5, function(val)
+    Config.AutoTpDelay = math.clamp(val / 10, 0.1, 2.0)
 end)
 
 tpTab:CreateSlider("Teleport Height Offset (Studs)", 0, 20, 3, function(val)
@@ -309,4 +350,4 @@ settingsTab:CreateSlider("Window Transparency", 0, 90, 25, function(val)
 end)
 
 lib:Notify("Part Teleport & Fly", "Loaded successfully! Press 'K' to hide or show GUI.", 5.0)
-print("[Part Teleport & Fly Suite] Loaded Successfully!")
+print("[Part Teleport & Fly Suite] Updated with Auto-TP Loop Successfully!")
