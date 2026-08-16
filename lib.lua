@@ -315,8 +315,8 @@ function Library:CreateInterface(titleText, descText, discordLink, position, the
         BackgroundColor3 = theme.MainBg,
         BackgroundTransparency = glassTransparency,
         BorderSizePixel = 0,
-        Active = true,
-        Draggable = true,
+        Active = false,
+        Draggable = false,
         Visible = true,
         Parent = ScreenGui
     })

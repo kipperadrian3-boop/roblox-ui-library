@@ -31,8 +31,8 @@ if not success or not lib or type(lib) ~= "table" then
     return
 end
 
--- Create Interface with Crimson Theme
-local int = lib:CreateInterface("Blox Fruits Suite", "Ultimate Level Farm & Kill Aura Engine", "", "bottom left", "blood", 0.25)
+-- Create Interface with Cyber Blue Theme
+local int = lib:CreateInterface("Blox Fruits Suite", "Ultimate Level Farm & Kill Aura Engine", "", "bottom left", "cyber", 0.25)
 
 -- Tabs
 local farmTab = int:CreateTab("Auto Farm", "Level Farm, Quests & Kill Aura", "op", true)
