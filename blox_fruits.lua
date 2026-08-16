@@ -1,12 +1,12 @@
 --[[
-	Blox Fruits - Dedicated Auto Farm & Quest Suite (blox_fruits.lua)
-	Features:
-	  - 📜 Auto Quest & Level Farm (Dynamically accepts level-appropriate quests & hunts mobs)
-	  - ⚔️ Weapon Mode Selector (Melee / Fists, Blox Fruit, Sword, Gun)
-	  - 🎯 Tween Position Mode (Above, Under, Behind, Front) & Farm Distance Offset
-	  - ⚡ Fast Attack & Bring Mobs Engine
-	  - 🏃 WASD Flight, Speed & Noclip Suite
-	  - 💾 Universal JSON Auto-Save via lib.lua Framework
+	Blox Fruits - Ultimate Auto Farm & Quest Suite (blox_fruits.lua)
+	Enhanced & Fixed Version:
+	  - 📜 Quest-Strict Auto Farm: ONLY attacks mobs belonging to active quest!
+	  - ⚔️ Robust Weapon Switcher: Seamlessly switches between Melee (Fists/Combat/Black Leg/Superhuman/Godhuman), Fruit, Sword & Gun.
+	  - 🛡️ Safe Farm Positioning: Noclip & BodyVelocity during farming prevents falling, knockback & mob damage.
+	  - 🎯 Customizable Tweening: Above, Under, Behind, Front modes with dynamic lookAt CFrame.
+	  - ⚡ Fast Attack & Bring Mobs Engine for maximum EXP yield.
+	  - 💾 Universal JSON Auto-Save via lib.lua Framework.
 ]]
 
 local Players = game:GetService("Players")
@@ -31,22 +31,22 @@ if not success or not lib or type(lib) ~= "table" then
     return
 end
 
--- Create Interface with Cyber Red / Crimson Theme
-local int = lib:CreateInterface("Blox Fruits Suite", "Level Farm, Quests & Tween Utilities", "", "bottom left", "blood", 0.25)
+-- Create Interface with Crimson Theme
+local int = lib:CreateInterface("Blox Fruits Suite", "Ultimate Level Farm & Combat Engine", "", "bottom left", "blood", 0.25)
 
 -- Tabs
 local farmTab = int:CreateTab("Auto Farm", "Level Farm, Quests & Combat", "op", true)
-local configTab = int:CreateTab("Farm Settings", "Tween Position & Weapon Mode", "item")
+local configTab = int:CreateTab("Farm Settings", "Tween Position & Weapon Selector", "item")
 local moveTab = int:CreateTab("Movement & Fly", "Flight, WalkSpeed & Noclip", "player")
 local settingsTab = int:CreateTab("Settings", "UI Customization & Config", "misc")
 
 -- Configuration State
 local Config = {
     AutoLevelFarm = false,
-    WeaponMode = "Melee", -- Melee, Blox Fruit, Sword, Gun
-    TweenPositionMode = "Above", -- Above, Under, Behind, Front
+    WeaponMode = "Melee", -- "Melee", "Blox Fruit", "Sword", "Gun"
+    TweenPositionMode = "Above", -- "Above", "Under", "Behind", "Front"
     TweenSpeed = 250,
-    FarmDistanceOffset = 7,
+    FarmDistanceOffset = 6,
     FastAttack = true,
     BringMobs = true,
     FlyEnabled = false,
@@ -56,14 +56,14 @@ local Config = {
     JumpPower = 50
 }
 
--- Active Status Tracker
+-- UI Status Label Reference
 local currentFarmStatusLabel = nil
 
--- Remotes & Services
+-- Remotes
 local CommF = ReplicatedStorage:FindFirstChild("Remotes") and ReplicatedStorage.Remotes:FindFirstChild("CommF_")
 
 -- --------------------------------------------------------------------
--- 1. BLOX FRUITS QUEST & MOB DATA ENGINE (FIRST, SECOND & THIRD SEA)
+-- 1. BLOX FRUITS QUEST & MOB DATA ENGINE
 -- --------------------------------------------------------------------
 
 local QuestData = {
@@ -87,7 +87,6 @@ local QuestData = {
     { MinLevel = 625, MaxLevel = 700, MobName = "Galley Pirate", QuestName = "FountainQuest", QuestLevel = 1, NpcCFrame = CFrame.new(5258, 39, 4050), MobCFrame = CFrame.new(5500, 50, 4000) }
 }
 
--- Get Current Level of Local Player
 local function getPlayerLevel()
     local levelVal = LocalPlayer:FindFirstChild("Data") and LocalPlayer.Data:FindFirstChild("Level")
     if levelVal then
@@ -96,7 +95,6 @@ local function getPlayerLevel()
     return 1
 end
 
--- Get Level Appropriate Quest Data
 local function getCurrentQuestInfo()
     local level = getPlayerLevel()
     for _, q in ipairs(QuestData) do
@@ -107,7 +105,6 @@ local function getCurrentQuestInfo()
     return QuestData[1]
 end
 
--- Check if player has an active quest
 local function hasActiveQuest()
     local mainGui = LocalPlayer:FindFirstChild("PlayerGui") and LocalPlayer.PlayerGui:FindFirstChild("Main")
     local questFrame = mainGui and mainGui:FindFirstChild("Quest")
@@ -116,10 +113,11 @@ end
 
 
 -- --------------------------------------------------------------------
--- 2. TWEEN MOVEMENT ENGINE (WITH ABOVE, UNDER, BEHIND, FRONT MODES)
+-- 2. TWEEN MOVEMENT & SAFE POSITIONING ENGINE
 -- --------------------------------------------------------------------
 
 local currentTween = nil
+local noclipConnection = nil
 
 local function stopTween()
     if currentTween then
@@ -129,19 +127,25 @@ local function stopTween()
 end
 
 local function calculateTweenCFrame(targetCFrame)
-    local offset = Config.FarmDistanceOffset or 7
+    local offset = Config.FarmDistanceOffset or 6
     local mode = Config.TweenPositionMode
+    local mobPos = targetCFrame.Position
+    local destPos = mobPos
 
     if mode == "Above" then
-        return targetCFrame * CFrame.new(0, offset, 0) * CFrame.Angles(math.rad(-90), 0, 0)
+        destPos = mobPos + Vector3.new(0, offset, 0)
     elseif mode == "Under" then
-        return targetCFrame * CFrame.new(0, -offset, 0) * CFrame.Angles(math.rad(90), 0, 0)
+        destPos = mobPos - Vector3.new(0, offset, 0)
     elseif mode == "Behind" then
-        return targetCFrame * CFrame.new(0, 0, offset)
+        destPos = mobPos + (targetCFrame.LookVector * -offset) + Vector3.new(0, 2, 0)
     elseif mode == "Front" then
-        return targetCFrame * CFrame.new(0, 0, -offset)
+        destPos = mobPos + (targetCFrame.LookVector * offset) + Vector3.new(0, 2, 0)
+    else
+        destPos = mobPos + Vector3.new(0, offset, 0)
     end
-    return targetCFrame * CFrame.new(0, offset, 0)
+
+    -- Return CFrame looking directly at mob
+    return CFrame.lookAt(destPos, mobPos)
 end
 
 local function tweenTo(targetCFrame)
@@ -162,10 +166,55 @@ local function tweenTo(targetCFrame)
     return currentTween
 end
 
+-- Enable Temporary Noclip during farming
+RunService.Stepped:Connect(function()
+    if (Config.AutoLevelFarm or Config.NoclipEnabled) and LocalPlayer.Character then
+        for _, part in ipairs(LocalPlayer.Character:GetDescendants()) do
+            if part:IsA("BasePart") then
+                part.CanCollide = false
+            end
+        end
+    end
+end)
+
 
 -- --------------------------------------------------------------------
--- 3. WEAPON AUTO-EQUIP ENGINE
+-- 3. ENHANCED WEAPON SELECTOR ENGINE (MELEE / FRUIT / SWORD / GUN)
 -- --------------------------------------------------------------------
+
+local function isMeleeTool(tool)
+    if not tool or not tool:IsA("Tool") then return false end
+    local name = tool.Name:lower()
+    local tooltip = (tool:GetAttribute("ToolTip") or tool.ToolTip or ""):lower()
+
+    if tooltip:find("melee") or name:find("combat") or name:find("black leg") or name:find("step")
+       or name:find("karate") or name:find("claw") or name:find("dragon") or name:find("superhuman")
+       or name:find("godhuman") or name:find("sanguine") or name:find("electro") or name:find("fist") then
+        return true
+    end
+    return false
+end
+
+local function isFruitTool(tool)
+    if not tool or not tool:IsA("Tool") then return false end
+    local name = tool.Name:lower()
+    local tooltip = (tool:GetAttribute("ToolTip") or tool.ToolTip or ""):lower()
+    return tooltip:find("blox fruit") or name:find("fruit") or name:find("power")
+end
+
+local function isSwordTool(tool)
+    if not tool or not tool:IsA("Tool") then return false end
+    local name = tool.Name:lower()
+    local tooltip = (tool:GetAttribute("ToolTip") or tool.ToolTip or ""):lower()
+    return tooltip:find("sword") or name:find("katana") or name:find("cutlass") or name:find("blade") or name:find("saber") or name:find("sword")
+end
+
+local function isGunTool(tool)
+    if not tool or not tool:IsA("Tool") then return false end
+    local name = tool.Name:lower()
+    local tooltip = (tool:GetAttribute("ToolTip") or tool.ToolTip or ""):lower()
+    return tooltip:find("gun") or name:find("musket") or name:find("slingshot") or name:find("rifle") or name:find("cannon") or name:find("flintlock")
+end
 
 local function equipSelectedWeapon()
     local char = LocalPlayer.Character
@@ -174,35 +223,25 @@ local function equipSelectedWeapon()
 
     local mode = Config.WeaponMode
 
-    -- Check if matching weapon is already equipped
-    local equippedTool = char:FindFirstChildOfClass("Tool")
-    if equippedTool then
-        local tType = equippedTool:GetAttribute("ToolTip") or equippedTool.ToolTip or equippedTool.Name
-        if mode == "Melee" and (tType:find("Melee") or equippedTool.Name:find("Combat") or equippedTool.Name:find("Black Leg")) then
-            return equippedTool
-        elseif mode == "Blox Fruit" and (tType:find("Blox Fruit") or equippedTool.Name:find("Fruit")) then
-            return equippedTool
-        elseif mode == "Sword" and (tType:find("Sword") or equippedTool.Name:find("Katana") or equippedTool.Name:find("Cutlass")) then
-            return equippedTool
-        elseif mode == "Gun" and (tType:find("Gun") or equippedTool.Name:find("Musket") or equippedTool.Name:find("Slingshot")) then
-            return equippedTool
-        end
+    -- Check currently equipped tool first
+    local currentTool = char:FindFirstChildOfClass("Tool")
+    if currentTool then
+        if mode == "Melee" and isMeleeTool(currentTool) then return currentTool end
+        if mode == "Blox Fruit" and isFruitTool(currentTool) then return currentTool end
+        if mode == "Sword" and isSwordTool(currentTool) then return currentTool end
+        if mode == "Gun" and isGunTool(currentTool) then return currentTool end
+        -- Unequip wrong tool so correct tool can be equipped
+        currentTool.Parent = bp
     end
 
-    -- Search Backpack for matching weapon type
+    -- Search Backpack for target weapon mode
     for _, tool in ipairs(bp:GetChildren()) do
         if tool:IsA("Tool") then
-            local tType = tool:GetAttribute("ToolTip") or tool.ToolTip or tool.Name
             local match = false
-
-            if mode == "Melee" and (tType:find("Melee") or tool.Name:find("Combat") or tool.Name:find("Black Leg") or tool.Name:find("Step") or tool.Name:find("Karate") or tool.Name:find("Claw") or tool.Name:find("Dragon")) then
-                match = true
-            elseif mode == "Blox Fruit" and (tType:find("Blox Fruit") or tool.Name:find("Fruit")) then
-                match = true
-            elseif mode == "Sword" and (tType:find("Sword") or tool.Name:find("Katana") or tool.Name:find("Cutlass") or tool.Name:find("Blade") or tool.Name:find("Saber")) then
-                match = true
-            elseif mode == "Gun" and (tType:find("Gun") or tool.Name:find("Musket") or tool.Name:find("Slingshot") or tool.Name:find("Rifle")) then
-                match = true
+            if mode == "Melee" and isMeleeTool(tool) then match = true
+            elseif mode == "Blox Fruit" and isFruitTool(tool) then match = true
+            elseif mode == "Sword" and isSwordTool(tool) then match = true
+            elseif mode == "Gun" and isGunTool(tool) then match = true
             end
 
             if match then
@@ -212,28 +251,41 @@ local function equipSelectedWeapon()
         end
     end
 
-    -- Fallback: Equip first tool in backpack if mode specific weapon not found
-    local firstTool = bp:FindFirstChildOfClass("Tool")
-    if firstTool then
-        char.Humanoid:EquipTool(firstTool)
-        return firstTool
+    -- Fallback: If mode is Melee but no named tool matched, equip ANY tool in backpack that isn't fruit/sword/gun
+    for _, tool in ipairs(bp:GetChildren()) do
+        if tool:IsA("Tool") then
+            if mode == "Melee" and not isFruitTool(tool) and not isSwordTool(tool) and not isGunTool(tool) then
+                char.Humanoid:EquipTool(tool)
+                return tool
+            end
+        end
+    end
+
+    -- Ultimate fallback: equip first tool available
+    local fallback = bp:FindFirstChildOfClass("Tool")
+    if fallback then
+        char.Humanoid:EquipTool(fallback)
+        return fallback
     end
 end
 
 
 -- --------------------------------------------------------------------
--- 4. FAST ATTACK & COMBAT ENGINE
+-- 4. FAST ATTACK & MOB BRINGING ENGINE
 -- --------------------------------------------------------------------
 
-local function triggerFastAttack()
+local function attackTarget(tool)
     if not Config.FastAttack then return end
     pcall(function()
+        if tool then
+            tool:Activate()
+        end
         VirtualUser:CaptureController()
         VirtualUser:Button1Down(Vector2.new(0, 0))
     end)
 end
 
--- Find target mob in Workspace
+-- Find matching target mob for current quest ONLY
 local function findTargetMob(mobName)
     local enemiesFolder = Workspace:FindFirstChild("Enemies") or Workspace
     for _, child in ipairs(enemiesFolder:GetChildren()) do
@@ -244,65 +296,85 @@ local function findTargetMob(mobName)
     return nil
 end
 
+-- Bring nearby matching mobs to target mob
+local function bringNearbyMobs(mainMob, mobName)
+    if not Config.BringMobs or not mainMob or not mainMob:FindFirstChild("HumanoidRootPart") then return end
+    local mainHrp = mainMob.HumanoidRootPart
+    local enemiesFolder = Workspace:FindFirstChild("Enemies") or Workspace
+
+    for _, other in ipairs(enemiesFolder:GetChildren()) do
+        if other ~= mainMob and other.Name:lower():find(mobName:lower()) then
+            local oHrp = other:FindFirstChild("HumanoidRootPart")
+            local oHum = other:FindFirstChildOfClass("Humanoid")
+            if oHrp and oHum and oHum.Health > 0 then
+                if (oHrp.Position - mainHrp.Position).Magnitude < 300 then
+                    oHrp.CFrame = mainHrp.CFrame * CFrame.new(0, 0, -1)
+                    oHrp.CanCollide = false
+                end
+            end
+        end
+    end
+end
+
 
 -- --------------------------------------------------------------------
--- 5. MAIN AUTO LEVEL FARM LOOP
+-- 5. MAIN QUEST-STRICT AUTO LEVEL FARM LOOP
 -- --------------------------------------------------------------------
 
 task.spawn(function()
     while true do
-        task.wait(0.1)
+        task.wait(0.08)
         if Config.AutoLevelFarm then
             pcall(function()
                 local qInfo = getCurrentQuestInfo()
 
-                -- Update status card
-                if currentFarmStatusLabel then
-                    currentFarmStatusLabel.Text = string.format("Level %d | Quest: %s (%s)", getPlayerLevel(), qInfo.MobName, Config.WeaponMode)
-                end
-
-                -- Step 1: Accept Quest if not active
+                -- Step 1: Check Quest Status
                 if not hasActiveQuest() then
                     if currentFarmStatusLabel then
-                        currentFarmStatusLabel.Text = string.format("Taking Quest: %s...", qInfo.MobName)
+                        currentFarmStatusLabel.Text = string.format("Accepting Quest: %s...", qInfo.MobName)
                     end
 
-                    -- Tween to Quest NPC
                     local char = LocalPlayer.Character
                     local hrp = char and char:FindFirstChild("HumanoidRootPart")
                     if hrp then
                         local dist = (hrp.Position - qInfo.NpcCFrame.Position).Magnitude
                         if dist > 15 then
                             tweenTo(qInfo.NpcCFrame)
-                            task.wait(0.5)
                         else
                             stopTween()
-                            -- Fire Remote to Start Quest
                             if CommF then
                                 CommF:InvokeServer("StartQuest", qInfo.QuestName, qInfo.QuestLevel)
                             end
-                            task.wait(0.5)
+                            task.wait(0.4)
                         end
                     end
                 else
-                    -- Step 2: Farm Mobs
+                    -- Step 2: Quest is active -> Farm ONLY quest mobs
                     local mob = findTargetMob(qInfo.MobName)
+
+                    if currentFarmStatusLabel then
+                        currentFarmStatusLabel.Text = string.format("Level %d | Quest Active: %s (%s)", getPlayerLevel(), qInfo.MobName, Config.WeaponMode)
+                    end
+
                     if mob and mob:FindFirstChild("HumanoidRootPart") then
                         local mobHrp = mob.HumanoidRootPart
                         local mobHum = mob:FindFirstChildOfClass("Humanoid")
 
-                        -- Tween to Mob position based on selected mode (Above, Under, Behind, Front)
+                        -- Safe Tween to Mob
                         tweenTo(mobHrp.CFrame)
 
-                        -- Equip Weapon
-                        equipSelectedWeapon()
+                        -- Equip selected weapon type
+                        local equippedTool = equipSelectedWeapon()
 
-                        -- Fast Attack Loop while Mob is alive
+                        -- Bring nearby mobs together
+                        bringNearbyMobs(mob, qInfo.MobName)
+
+                        -- Attack
                         if mobHum and mobHum.Health > 0 then
-                            triggerFastAttack()
+                            attackTarget(equippedTool)
                         end
                     else
-                        -- If mob not spawned yet, tween to Mob spawn point
+                        -- If mob not spawned yet, wait at safe mob spawn CFrame
                         tweenTo(qInfo.MobCFrame)
                     end
                 end
@@ -315,7 +387,7 @@ end)
 
 
 -- --------------------------------------------------------------------
--- 6. MOVEMENT & FLY SUITE
+-- 6. MOVEMENT & WASD FLIGHT SUITE
 -- --------------------------------------------------------------------
 
 local flyGyro, flyVel
@@ -365,16 +437,6 @@ RunService.RenderStepped:Connect(function()
     end
 end)
 
-RunService.Stepped:Connect(function()
-    if Config.NoclipEnabled and LocalPlayer.Character then
-        for _, part in ipairs(LocalPlayer.Character:GetDescendants()) do
-            if part:IsA("BasePart") then
-                part.CanCollide = false
-            end
-        end
-    end
-end)
-
 
 -- --------------------------------------------------------------------
 -- UI INTERFACE CREATION (LIB.LUA FRAMEWORK)
@@ -383,10 +445,10 @@ end)
 -- TAB 1: AUTO FARM
 farmTab:CreateComment("--- Auto Quest & Level Farm ---")
 
-farmTab:CreateToggleSwitch("Auto Level Farm (Auto Quest + Mobs)", false, function(val)
+farmTab:CreateToggleSwitch("Auto Level Farm (Quest Strict + Mobs)", false, function(val)
     Config.AutoLevelFarm = val
     if val then
-        lib:Notify("Auto Farm", "Auto Level Farm Active!", 2.0)
+        lib:Notify("Auto Farm", "Quest-Strict Level Farm Activated!", 2.0)
     else
         stopTween()
         lib:Notify("Auto Farm", "Auto Level Farm Deactivated.", 1.5)
@@ -432,6 +494,7 @@ local weaponTypes = {"Melee", "Blox Fruit", "Sword", "Gun"}
 for _, wName in ipairs(weaponTypes) do
     weaponDrop:AddButton("Weapon: " .. wName, function()
         Config.WeaponMode = wName
+        equipSelectedWeapon()
         lib:Notify("Weapon Mode", "Selected Weapon: " .. wName, 1.5)
     end)
 end
@@ -450,7 +513,7 @@ configTab:CreateSlider("Tween Speed (Studs/sec)", 100, 350, 250, function(val)
     Config.TweenSpeed = val
 end)
 
-configTab:CreateSlider("Farm Distance Offset (Studs)", 3, 20, 7, function(val)
+configTab:CreateSlider("Farm Distance Offset (Studs)", 3, 20, 6, function(val)
     Config.FarmDistanceOffset = val
 end)
 
@@ -501,4 +564,4 @@ settingsTab:CreateSlider("Window Transparency", 0, 90, 25, function(val)
 end)
 
 lib:Notify("Blox Fruits Suite", "Loaded successfully! Press 'K' to hide or show GUI.", 5.0)
-print("[Blox Fruits Suite] Official Blox Fruits Auto Farm Suite Loaded Successfully!")
+print("[Blox Fruits Suite] Ultimate Blox Fruits Auto Farm Suite Loaded Successfully!")
