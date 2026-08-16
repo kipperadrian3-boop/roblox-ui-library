@@ -1,11 +1,11 @@
 --[[
-	Blox Fruits - Ultimate Auto Farm & Quest Suite (blox_fruits.lua)
+	Blox Fruits - Ultimate Auto Farm & Kill Aura Suite (blox_fruits.lua)
 	Enhanced & Fixed Version:
-	  - 📜 Quest-Strict Auto Farm: ONLY attacks mobs belonging to active quest!
-	  - ⚔️ Robust Weapon Switcher: Seamlessly switches between Melee (Fists/Combat/Black Leg/Superhuman/Godhuman), Fruit, Sword & Gun.
-	  - 🛡️ Safe Farm Positioning: Noclip & BodyVelocity during farming prevents falling, knockback & mob damage.
-	  - 🎯 Customizable Tweening: Above, Under, Behind, Front modes with dynamic lookAt CFrame.
-	  - ⚡ Fast Attack & Bring Mobs Engine for maximum EXP yield.
+	  - ⚡ Kill Aura & Hitbox Extender: Brings mob hitboxes directly into attack range so 15-stud distance hits every mob instantly!
+	  - 🖱️ Mouse-Lock & Frame Freeze Fix: Removed VirtualUser mouse capture (No more cursor sticking or frame lag!)
+	  - 📏 15 Studs Default Distance: Safe 15-stud farming distance prevents mobs from hitting/killing player.
+	  - 📜 Quest-Strict Targeting: ONLY attacks mobs belonging to active quest.
+	  - ⚔️ Seamless Weapon Selector: Fists/Melee, Blox Fruit, Sword & Gun.
 	  - 💾 Universal JSON Auto-Save via lib.lua Framework.
 ]]
 
@@ -15,7 +15,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
-local VirtualUser = game:GetService("VirtualUser")
+local VirtualInputManager = game:GetService("VirtualInputManager")
 
 local LocalPlayer = Players.LocalPlayer
 
@@ -32,10 +32,10 @@ if not success or not lib or type(lib) ~= "table" then
 end
 
 -- Create Interface with Crimson Theme
-local int = lib:CreateInterface("Blox Fruits Suite", "Ultimate Level Farm & Combat Engine", "", "bottom left", "blood", 0.25)
+local int = lib:CreateInterface("Blox Fruits Suite", "Ultimate Level Farm & Kill Aura Engine", "", "bottom left", "blood", 0.25)
 
 -- Tabs
-local farmTab = int:CreateTab("Auto Farm", "Level Farm, Quests & Combat", "op", true)
+local farmTab = int:CreateTab("Auto Farm", "Level Farm, Quests & Kill Aura", "op", true)
 local configTab = int:CreateTab("Farm Settings", "Tween Position & Weapon Selector", "item")
 local moveTab = int:CreateTab("Movement & Fly", "Flight, WalkSpeed & Noclip", "player")
 local settingsTab = int:CreateTab("Settings", "UI Customization & Config", "misc")
@@ -46,8 +46,8 @@ local Config = {
     WeaponMode = "Melee", -- "Melee", "Blox Fruit", "Sword", "Gun"
     TweenPositionMode = "Above", -- "Above", "Under", "Behind", "Front"
     TweenSpeed = 250,
-    FarmDistanceOffset = 6,
-    FastAttack = true,
+    FarmDistanceOffset = 15, -- Default 15 studs distance
+    KillAura = true,
     BringMobs = true,
     FlyEnabled = false,
     FlySpeed = 50,
@@ -113,11 +113,10 @@ end
 
 
 -- --------------------------------------------------------------------
--- 2. TWEEN MOVEMENT & SAFE POSITIONING ENGINE
+-- 2. TWEEN MOVEMENT & SAFE POSITIONING ENGINE (15 STUDS DEFAULT)
 -- --------------------------------------------------------------------
 
 local currentTween = nil
-local noclipConnection = nil
 
 local function stopTween()
     if currentTween then
@@ -127,7 +126,7 @@ local function stopTween()
 end
 
 local function calculateTweenCFrame(targetCFrame)
-    local offset = Config.FarmDistanceOffset or 6
+    local offset = Config.FarmDistanceOffset or 15
     local mode = Config.TweenPositionMode
     local mobPos = targetCFrame.Position
     local destPos = mobPos
@@ -137,14 +136,14 @@ local function calculateTweenCFrame(targetCFrame)
     elseif mode == "Under" then
         destPos = mobPos - Vector3.new(0, offset, 0)
     elseif mode == "Behind" then
-        destPos = mobPos + (targetCFrame.LookVector * -offset) + Vector3.new(0, 2, 0)
+        destPos = mobPos + (targetCFrame.LookVector * -offset) + Vector3.new(0, 3, 0)
     elseif mode == "Front" then
-        destPos = mobPos + (targetCFrame.LookVector * offset) + Vector3.new(0, 2, 0)
+        destPos = mobPos + (targetCFrame.LookVector * offset) + Vector3.new(0, 3, 0)
     else
         destPos = mobPos + Vector3.new(0, offset, 0)
     end
 
-    -- Return CFrame looking directly at mob
+    -- Return CFrame looking directly at mob position
     return CFrame.lookAt(destPos, mobPos)
 end
 
@@ -166,7 +165,9 @@ local function tweenTo(targetCFrame)
     return currentTween
 end
 
--- Enable Temporary Noclip during farming
+-- Automatic Noclip & Anti-Fall BodyVelocity during Auto Farm
+local farmBodyVel = nil
+
 RunService.Stepped:Connect(function()
     if (Config.AutoLevelFarm or Config.NoclipEnabled) and LocalPlayer.Character then
         for _, part in ipairs(LocalPlayer.Character:GetDescendants()) do
@@ -174,12 +175,27 @@ RunService.Stepped:Connect(function()
                 part.CanCollide = false
             end
         end
+
+        local hrp = LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+        if hrp and Config.AutoLevelFarm then
+            if not farmBodyVel or farmBodyVel.Parent ~= hrp then
+                if farmBodyVel then farmBodyVel:Destroy() end
+                farmBodyVel = Instance.new("BodyVelocity")
+                farmBodyVel.velocity = Vector3.new(0, 0, 0)
+                farmBodyVel.maxForce = Vector3.new(9e9, 9e9, 9e9)
+                farmBodyVel.Parent = hrp
+            end
+        else
+            if farmBodyVel then farmBodyVel:Destroy() farmBodyVel = nil end
+        end
+    else
+        if farmBodyVel then farmBodyVel:Destroy() farmBodyVel = nil end
     end
 end)
 
 
 -- --------------------------------------------------------------------
--- 3. ENHANCED WEAPON SELECTOR ENGINE (MELEE / FRUIT / SWORD / GUN)
+-- 3. WEAPON SELECTOR ENGINE (MELEE / FRUIT / SWORD / GUN)
 -- --------------------------------------------------------------------
 
 local function isMeleeTool(tool)
@@ -230,7 +246,7 @@ local function equipSelectedWeapon()
         if mode == "Blox Fruit" and isFruitTool(currentTool) then return currentTool end
         if mode == "Sword" and isSwordTool(currentTool) then return currentTool end
         if mode == "Gun" and isGunTool(currentTool) then return currentTool end
-        -- Unequip wrong tool so correct tool can be equipped
+        -- Unequip wrong tool to Backpack
         currentTool.Parent = bp
     end
 
@@ -251,7 +267,7 @@ local function equipSelectedWeapon()
         end
     end
 
-    -- Fallback: If mode is Melee but no named tool matched, equip ANY tool in backpack that isn't fruit/sword/gun
+    -- Fallback for Melee: equip any non-fruit/sword/gun tool
     for _, tool in ipairs(bp:GetChildren()) do
         if tool:IsA("Tool") then
             if mode == "Melee" and not isFruitTool(tool) and not isSwordTool(tool) and not isGunTool(tool) then
@@ -261,7 +277,6 @@ local function equipSelectedWeapon()
         end
     end
 
-    -- Ultimate fallback: equip first tool available
     local fallback = bp:FindFirstChildOfClass("Tool")
     if fallback then
         char.Humanoid:EquipTool(fallback)
@@ -271,17 +286,16 @@ end
 
 
 -- --------------------------------------------------------------------
--- 4. FAST ATTACK & MOB BRINGING ENGINE
+-- 4. KILL AURA & ATTACK ENGINE (NO MOUSE FREEZE / MOUSE LOCK)
 -- --------------------------------------------------------------------
 
 local function attackTarget(tool)
-    if not Config.FastAttack then return end
+    if not tool then return end
     pcall(function()
-        if tool then
-            tool:Activate()
-        end
-        VirtualUser:CaptureController()
-        VirtualUser:Button1Down(Vector2.new(0, 0))
+        -- Activate tool directly without VirtualUser mouse capture (Prevents frame freeze!)
+        tool:Activate()
+        VirtualInputManager:SendMouseButtonEvent(0, 0, 0, true, game, 1)
+        VirtualInputManager:SendMouseButtonEvent(0, 0, 0, false, game, 1)
     end)
 end
 
@@ -296,20 +310,24 @@ local function findTargetMob(mobName)
     return nil
 end
 
--- Bring nearby matching mobs to target mob
-local function bringNearbyMobs(mainMob, mobName)
-    if not Config.BringMobs or not mainMob or not mainMob:FindFirstChild("HumanoidRootPart") then return end
-    local mainHrp = mainMob.HumanoidRootPart
+-- KILL AURA: Bring mob hitboxes directly into attack range right in front of player
+local function bringMobsKillAura(mainMob, mobName)
+    local char = LocalPlayer.Character
+    local playerHrp = char and char:FindFirstChild("HumanoidRootPart")
+    if not playerHrp or not mainMob or not mainMob:FindFirstChild("HumanoidRootPart") then return end
+
+    local attackHitboxPoint = playerHrp.CFrame * CFrame.new(0, -3, -3)
     local enemiesFolder = Workspace:FindFirstChild("Enemies") or Workspace
 
-    for _, other in ipairs(enemiesFolder:GetChildren()) do
-        if other ~= mainMob and other.Name:lower():find(mobName:lower()) then
-            local oHrp = other:FindFirstChild("HumanoidRootPart")
-            local oHum = other:FindFirstChildOfClass("Humanoid")
-            if oHrp and oHum and oHum.Health > 0 then
-                if (oHrp.Position - mainHrp.Position).Magnitude < 300 then
-                    oHrp.CFrame = mainHrp.CFrame * CFrame.new(0, 0, -1)
-                    oHrp.CanCollide = false
+    for _, enemy in ipairs(enemiesFolder:GetChildren()) do
+        if enemy.Name:lower():find(mobName:lower()) then
+            local eHrp = enemy:FindFirstChild("HumanoidRootPart")
+            local eHum = enemy:FindFirstChildOfClass("Humanoid")
+            if eHrp and eHum and eHum.Health > 0 then
+                if (eHrp.Position - playerHrp.Position).Magnitude < 300 then
+                    eHrp.CFrame = attackHitboxPoint
+                    eHrp.CanCollide = false
+                    eHrp.Size = Vector3.new(12, 12, 12)
                 end
             end
         end
@@ -360,14 +378,16 @@ task.spawn(function()
                         local mobHrp = mob.HumanoidRootPart
                         local mobHum = mob:FindFirstChildOfClass("Humanoid")
 
-                        -- Safe Tween to Mob
+                        -- Safe Tween to Mob (15 studs default offset)
                         tweenTo(mobHrp.CFrame)
 
                         -- Equip selected weapon type
                         local equippedTool = equipSelectedWeapon()
 
-                        -- Bring nearby mobs together
-                        bringNearbyMobs(mob, qInfo.MobName)
+                        -- Kill Aura & Bring Mobs to Attack Hitbox
+                        if Config.KillAura or Config.BringMobs then
+                            bringMobsKillAura(mob, qInfo.MobName)
+                        end
 
                         -- Attack
                         if mobHum and mobHum.Health > 0 then
@@ -448,15 +468,15 @@ farmTab:CreateComment("--- Auto Quest & Level Farm ---")
 farmTab:CreateToggleSwitch("Auto Level Farm (Quest Strict + Mobs)", false, function(val)
     Config.AutoLevelFarm = val
     if val then
-        lib:Notify("Auto Farm", "Quest-Strict Level Farm Activated!", 2.0)
+        lib:Notify("Auto Farm", "Quest-Strict Level Farm & Kill Aura Activated!", 2.0)
     else
         stopTween()
         lib:Notify("Auto Farm", "Auto Level Farm Deactivated.", 1.5)
     end
 end)
 
-farmTab:CreateToggleSwitch("Fast Attack Engine", true, function(val)
-    Config.FastAttack = val
+farmTab:CreateToggleSwitch("Kill Aura & Hitbox Extender", true, function(val)
+    Config.KillAura = val
 end)
 
 farmTab:CreateToggleSwitch("Bring Mobs", true, function(val)
@@ -513,7 +533,7 @@ configTab:CreateSlider("Tween Speed (Studs/sec)", 100, 350, 250, function(val)
     Config.TweenSpeed = val
 end)
 
-configTab:CreateSlider("Farm Distance Offset (Studs)", 3, 20, 6, function(val)
+configTab:CreateSlider("Farm Distance Offset (Studs)", 3, 30, 15, function(val)
     Config.FarmDistanceOffset = val
 end)
 
