@@ -2,7 +2,7 @@
 	Mine a Mountain - Official Script Suite (mine_a_mountain.lua)
 	Features:
 	  - 💎 Rich Finder / Leaderboard Hop: Server hops automatically until a player with >10B Coins (configurable) is found!
-	  - 🔄 Auto Re-Execution: Uses queue_on_teleport to automatically re-run the script after every server hop!
+	  - 🔄 Persistent Auto-Hop State: Saves state to disk so hopping continues seamlessly across servers until a rich player is found!
 	  - 🚫 Anti-Repeat Server Hop: Remembers visited server IDs so it NEVER joins the same server twice!
 	  - ⛏️ Auto Mine & Farm: Automates mining, swinging pickaxe & collecting drops
 	  - 🏃 Movement Suite: Fly, FlySpeed, Noclip, WalkSpeed & JumpPower
@@ -56,6 +56,7 @@ local Config = {
 
 -- Active Status Label for Rich Finder
 local richStatusLabel = nil
+local richToggleSwitch = nil
 
 -- --------------------------------------------------------------------
 -- HELPER: PARSE & FORMAT COINS / LEADERSTATS
@@ -134,7 +135,11 @@ end
 local function performServerHop()
     recordVisitedServer(game.JobId)
 
-    -- Queue self re-execution on teleport using executor queue API
+    -- Save RichFinderActive = true to JSON disk before teleporting
+    int.ConfigState["Rich Finder_Rich Finder Auto Server Hop"] = true
+    int:SaveConfig()
+
+    -- Queue self re-execution for executors supporting queue_on_teleport
     local queueTeleport = queue_on_teleport or (syn and syn.queue_on_teleport) or queue_to_teleport or (Fluxus and Fluxus.queue_on_teleport)
     if queueTeleport then
         pcall(function()
@@ -195,12 +200,17 @@ local function checkServerForRichPlayer()
     end
 
     if highestCoins >= targetThreshold then
-        lib:Notify("Rich Player Found!", string.format("Player %s has %s Coins!", richestPlayer.Name, formatCoinsShort(highestCoins)), 5.0)
+        -- FOUND! Stop hopping, update Config & save to disk
+        Config.RichFinderActive = false
+        int.ConfigState["Rich Finder_Rich Finder Auto Server Hop"] = false
+        int:SaveConfig()
+
+        lib:Notify("Rich Player Found!", string.format("Player %s has %s Coins! Staying in server.", richestPlayer.Name, formatCoinsShort(highestCoins)), 6.0)
         if richStatusLabel then
             richStatusLabel.Text = string.format("MATCH FOUND! %s (%s Coins)", richestPlayer.Name, formatCoinsShort(highestCoins))
             richStatusLabel.TextColor3 = Color3.fromRGB(0, 255, 180)
         end
-        return true -- Found! Stay in server!
+        return true
     end
 
     return false
@@ -208,13 +218,13 @@ end
 
 -- Auto Server Hop Loop
 task.spawn(function()
-    task.wait(3.0) -- Wait for leaderstats to load
+    task.wait(3.0) -- Wait for leaderstats to load on join
     while true do
-        task.wait(1.5)
+        task.wait(2.0)
         if Config.RichFinderActive then
             local found = checkServerForRichPlayer()
             if not found then
-                task.wait(2.0)
+                task.wait(1.5)
                 if Config.RichFinderActive then
                     performServerHop()
                     break
@@ -321,7 +331,7 @@ end)
 -- RICH FINDER TAB
 richTab:CreateComment("--- Leaderboard Server Hop (Rich Finder) ---")
 
-richTab:CreateToggleSwitch("Rich Finder Auto Server Hop", false, function(val)
+richToggleSwitch = richTab:CreateToggleSwitch("Rich Finder Auto Server Hop", false, function(val)
     Config.RichFinderActive = val
     if val then
         lib:Notify("Rich Finder", "Server Hop Active! Searching for player with >" .. tostring(Config.MinCoinsBillion) .. "B Coins...", 3.0)
@@ -360,6 +370,8 @@ richStatusLabel.Parent = statusCard
 richTab:CreateButton("Manual Server Hop Now", function()
     performServerHop()
 end)
+
+richTab:CreateComment("Tip: For Solara / Auto-Hop, place mine_a_mountain_autoexecute.lua in your Solara 'autoexecute' folder!")
 
 
 -- AUTO MINING TAB
