@@ -48,8 +48,16 @@ loadstring(game:HttpGet("https://raw.githubusercontent.com/kipperadrian3-boop/ro
 
 ---
 
-## 📡 Advanced Remote Spy
+## 📍 TP Location Suite - Quick Execution
 
 ```lua
-loadstring(game:HttpGet("https://raw.githubusercontent.com/kipperadrian3-boop/roblox-ui-library/main/remote_spy.lua"))()
+loadstring(game:HttpGet("https://raw.githubusercontent.com/kipperadrian3-boop/roblox-ui-library/main/tp_location.lua"))()
 ```
+
+### Features:
+- **Draggable Right GUI**: Platziert die GUI rechts am Bildschirm und lässt sich per Maus/Touch überall hinziehen.
+- **📍 Set Location**: Speichert deine aktuelle Position & Ausrichtung (CFrame) inkl. Koordinatenanzeige.
+- **🚀 TP Location**: Teleportiert dich sofort zur gespeicherten Position (unbegrenzt oft verwendbar).
+- **⚡ Auto TP (0.1s)**: ON/OFF Toggle, der dich automatisch alle 0.1 Sekunden zur gespeicherten Position teleportiert.
+- **⌨️ Keybind & Minimize**: Drücke `[K]` oder klicke auf `-`, um die GUI zu minimieren oder ein-/auszubleben.
+
