@@ -230,6 +230,8 @@ local function createButton(order, text, icon, accentColor)
         TweenService:Create(btnStroke, TweenInfo.new(0.15), {Transparency = 0.5}):Play()
     end)
 
+    btn.Parent = Content
+
     return btn, btnLabel, btnStroke
 end
 
