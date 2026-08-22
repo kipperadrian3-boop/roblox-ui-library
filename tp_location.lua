@@ -5,7 +5,9 @@
 	  - 📍 "Set Location": Saves current player CFrame & coordinates
 	  - 🚀 "TP Location": Instantly teleports player to saved location (repeatable)
 	  - ⚡ "Auto TP (0.1s)": ON/OFF Toggle loop teleporting every 0.1 seconds
-	  - ⌨️ Keybind Toggle: Press [K] or click Minimize to hide/show GUI
+	  - ⏩ "Forward TP [L]": Teleports forward X studs (customizable input, default 15)
+	  - ⌨️ Keybinds: Press [K] to toggle GUI, Press [L] to TP Forward
+	  - 🧹 Auto Clean: Automatically deletes old GUI instances on re-execution
 ]]
 
 local Players = game:GetService("Players")
@@ -37,16 +39,31 @@ local function getGuiParent()
     return LocalPlayer:WaitForChild("PlayerGui")
 end
 
--- Prevent duplicate UI instances
-local parentGui = getGuiParent()
-if parentGui:FindFirstChild("TpLocationGui") then
-    parentGui.TpLocationGui:Destroy()
+-- Completely clean up any old GUI instances across all parents on re-execution
+local function cleanupOldGuis()
+    local targets = {CoreGui, LocalPlayer:FindFirstChild("PlayerGui")}
+    pcall(function()
+        if gethui then table.insert(targets, gethui()) end
+    end)
+    for _, target in ipairs(targets) do
+        if target then
+            for _, child in ipairs(target:GetChildren()) do
+                if child.Name == "TpLocationGui" then
+                    child:Destroy()
+                end
+            end
+        end
+    end
 end
+cleanupOldGuis()
 
 -- Script State
 local savedCFrame = nil
 local autoTpActive = false
 local autoTpThread = nil
+local forwardDistance = 15
+
+local parentGui = getGuiParent()
 
 -- UI Creation
 local ScreenGui = Instance.new("ScreenGui")
@@ -58,8 +75,8 @@ ScreenGui.Parent = parentGui
 -- Main Frame (Right side default)
 local MainFrame = Instance.new("Frame")
 MainFrame.Name = "MainFrame"
-MainFrame.Size = UDim2.new(0, 230, 0, 270)
-MainFrame.Position = UDim2.new(1, -245, 0.35, 0)
+MainFrame.Size = UDim2.new(0, 230, 0, 330)
+MainFrame.Position = UDim2.new(1, -245, 0.3, 0)
 MainFrame.BackgroundColor3 = Color3.fromRGB(15, 18, 26)
 MainFrame.BackgroundTransparency = 0.1
 MainFrame.BorderSizePixel = 0
@@ -199,6 +216,7 @@ local function createButton(order, text, icon, accentColor)
     btn.BorderSizePixel = 0
     btn.Text = ""
     btn.AutoButtonColor = false
+    btn.Parent = Content
 
     local btnCorner = Instance.new("UICorner")
     btnCorner.CornerRadius = UDim.new(0, 8)
@@ -229,8 +247,6 @@ local function createButton(order, text, icon, accentColor)
         TweenService:Create(btn, TweenInfo.new(0.15), {BackgroundColor3 = Color3.fromRGB(24, 29, 42)}):Play()
         TweenService:Create(btnStroke, TweenInfo.new(0.15), {Transparency = 0.5}):Play()
     end)
-
-    btn.Parent = Content
 
     return btn, btnLabel, btnStroke
 end
@@ -264,7 +280,7 @@ StatusText.Parent = StatusBox
 -- 2. TP LOCATION BUTTON (Middle)
 local tpBtn, tpLabel, tpStroke = createButton(3, "TP Location", "🚀", Color3.fromRGB(130, 85, 245))
 
--- 3. AUTO TP TOGGLE (Bottom - Teleport every 0.1 seconds)
+-- 3. AUTO TP TOGGLE (Teleport every 0.1 seconds)
 local ToggleFrame = Instance.new("Frame")
 ToggleFrame.LayoutOrder = 4
 ToggleFrame.Size = UDim2.new(1, 0, 0, 42)
@@ -319,19 +335,91 @@ local KnobCorner = Instance.new("UICorner")
 KnobCorner.CornerRadius = UDim.new(1, 0)
 KnobCorner.Parent = SwitchKnob
 
+-- 4. FORWARD TP FRAME ([L] Key & Studs Textbox)
+local ForwardFrame = Instance.new("Frame")
+ForwardFrame.LayoutOrder = 5
+ForwardFrame.Size = UDim2.new(1, 0, 0, 42)
+ForwardFrame.BackgroundColor3 = Color3.fromRGB(24, 29, 42)
+ForwardFrame.BorderSizePixel = 0
+ForwardFrame.Parent = Content
+
+local ForwardCorner = Instance.new("UICorner")
+ForwardCorner.CornerRadius = UDim.new(0, 8)
+ForwardCorner.Parent = ForwardFrame
+
+local ForwardStroke = Instance.new("UIStroke")
+ForwardStroke.Color = Color3.fromRGB(60, 70, 95)
+ForwardStroke.Thickness = 1
+ForwardStroke.Transparency = 0.5
+ForwardStroke.Parent = ForwardFrame
+
+local ForwardLabel = Instance.new("TextLabel")
+ForwardLabel.Size = UDim2.new(1, -95, 1, 0)
+ForwardLabel.Position = UDim2.new(0, 12, 0, 0)
+ForwardLabel.BackgroundTransparency = 1
+ForwardLabel.Text = "⏩ Forward [L]"
+ForwardLabel.TextColor3 = Color3.fromRGB(235, 240, 255)
+ForwardLabel.TextSize = 13
+ForwardLabel.Font = Enum.Font.GothamSemibold
+ForwardLabel.TextXAlignment = Enum.TextXAlignment.Left
+ForwardLabel.Parent = ForwardFrame
+
+-- Studs Input Textbox
+local StudsInput = Instance.new("TextBox")
+StudsInput.Name = "StudsInput"
+StudsInput.Size = UDim2.new(0, 45, 0, 26)
+StudsInput.Position = UDim2.new(1, -85, 0.5, -13)
+StudsInput.BackgroundColor3 = Color3.fromRGB(15, 18, 26)
+StudsInput.BorderSizePixel = 0
+StudsInput.Text = "15"
+StudsInput.PlaceholderText = "Studs"
+StudsInput.TextColor3 = Color3.fromRGB(0, 220, 255)
+StudsInput.TextSize = 12
+StudsInput.Font = Enum.Font.GothamBold
+StudsInput.ClearTextOnFocus = false
+StudsInput.Parent = ForwardFrame
+
+local InputCorner = Instance.new("UICorner")
+InputCorner.CornerRadius = UDim.new(0, 6)
+InputCorner.Parent = StudsInput
+
+local InputStroke = Instance.new("UIStroke")
+InputStroke.Color = Color3.fromRGB(0, 180, 255)
+InputStroke.Thickness = 1
+InputStroke.Transparency = 0.6
+InputStroke.Parent = StudsInput
+
+-- Forward TP Button
+local ForwardBtn = Instance.new("TextButton")
+ForwardBtn.Name = "ForwardBtn"
+ForwardBtn.Size = UDim2.new(0, 32, 0, 26)
+ForwardBtn.Position = UDim2.new(1, -36, 0.5, -13)
+ForwardBtn.BackgroundColor3 = Color3.fromRGB(0, 170, 255)
+ForwardBtn.BorderSizePixel = 0
+ForwardBtn.Text = "TP"
+ForwardBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+ForwardBtn.TextSize = 11
+ForwardBtn.Font = Enum.Font.GothamBold
+ForwardBtn.AutoButtonColor = false
+ForwardBtn.Parent = ForwardFrame
+
+local ForwardBtnCorner = Instance.new("UICorner")
+ForwardBtnCorner.CornerRadius = UDim.new(0, 6)
+ForwardBtnCorner.Parent = ForwardBtn
+
 -- Bottom Footer / Keybind Hint
 local Footer = Instance.new("TextLabel")
-Footer.LayoutOrder = 5
+Footer.LayoutOrder = 6
 Footer.Size = UDim2.new(1, 0, 0, 18)
 Footer.BackgroundTransparency = 1
-Footer.Text = "Taste [K] zum Ein-/Ausblenden"
+Footer.Text = "[K] GUI Toggle  |  [L] Forward TP"
 Footer.TextColor3 = Color3.fromRGB(100, 115, 140)
 Footer.TextSize = 10
 Footer.Font = Enum.Font.Gotham
 Footer.Parent = Content
 
 
--- Helper Teleport Function
+-- Helper Teleport Functions
 local function teleportToSaved()
     if not savedCFrame then
         StatusText.Text = "⚠️ Erst Position setzen!"
@@ -362,8 +450,26 @@ local function teleportToSaved()
     return false
 end
 
+local function tpForward(studs)
+    studs = studs or forwardDistance
+    local char = LocalPlayer.Character
+    if not char then return end
+
+    local hrp = char:FindFirstChild("HumanoidRootPart")
+    local humanoid = char:FindFirstChildOfClass("Humanoid")
+
+    if hrp and humanoid and humanoid.Health > 0 then
+        pcall(function()
+            hrp.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
+            hrp.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
+        end)
+        -- Teleport forward along character facing direction
+        hrp.CFrame = hrp.CFrame + (hrp.CFrame.LookVector * studs)
+    end
+end
+
 -- --------------------------------------------------------------------
--- BUTTON LOGIC & CONNECTIONS
+-- BUTTON LOGIC & INPUT CONNECTIONS
 -- --------------------------------------------------------------------
 
 -- 1. Set Location Handler
@@ -391,7 +497,6 @@ end)
 -- 2. TP Location Handler
 tpBtn.MouseButton1Click:Connect(function()
     if teleportToSaved() then
-        -- Teleport click feedback animation
         TweenService:Create(tpStroke, TweenInfo.new(0.1), {Color = Color3.fromRGB(180, 120, 255), Transparency = 0}):Play()
         task.delay(0.2, function()
             TweenService:Create(tpStroke, TweenInfo.new(0.3), {Color = Color3.fromRGB(130, 85, 245), Transparency = 0.5}):Play()
@@ -418,7 +523,6 @@ local function setAutoTp(state)
     
     if autoTpActive then
         if not savedCFrame then
-            -- Auto-set current location if none saved yet
             local char = LocalPlayer.Character
             local hrp = char and char:FindFirstChild("HumanoidRootPart")
             if hrp then
@@ -429,7 +533,6 @@ local function setAutoTp(state)
             end
         end
 
-        -- Start background thread for 0.1s loop
         if autoTpThread then task.cancel(autoTpThread) end
         autoTpThread = task.spawn(function()
             while autoTpActive do
@@ -449,6 +552,28 @@ SwitchBg.MouseButton1Click:Connect(function()
     setAutoTp(not autoTpActive)
 end)
 
+-- 4. Forward TP Input & Button Logic
+StudsInput.FocusLost:Connect(function()
+    local val = tonumber(StudsInput.Text)
+    if val and val > 0 then
+        forwardDistance = val
+        StudsInput.Text = tostring(val)
+    else
+        StudsInput.Text = tostring(forwardDistance)
+    end
+end)
+
+StudsInput:GetPropertyChangedSignal("Text"):Connect(function()
+    local val = tonumber(StudsInput.Text)
+    if val then
+        forwardDistance = val
+    end
+end)
+
+ForwardBtn.MouseButton1Click:Connect(function()
+    tpForward(forwardDistance)
+end)
+
 -- Minimize Button Logic
 local isMinimized = false
 MinimizeBtn.MouseButton1Click:Connect(function()
@@ -458,18 +583,20 @@ MinimizeBtn.MouseButton1Click:Connect(function()
         Content.Visible = false
         MinimizeBtn.Text = "+"
     else
-        MainFrame:TweenSize(UDim2.new(0, 230, 0, 270), Enum.EasingDirection.Out, Enum.EasingStyle.Quad, 0.2, true)
+        MainFrame:TweenSize(UDim2.new(0, 230, 0, 330), Enum.EasingDirection.Out, Enum.EasingStyle.Quad, 0.2, true)
         task.delay(0.1, function() Content.Visible = true end)
         MinimizeBtn.Text = "-"
     end
 end)
 
--- Keybind Toggle (Press K to hide/show GUI)
+-- Keybinds: [K] Toggle GUI | [L] Forward Teleport
 UserInputService.InputBegan:Connect(function(input, gpe)
     if gpe then return end
     if input.KeyCode == Enum.KeyCode.K then
         MainFrame.Visible = not MainFrame.Visible
+    elseif input.KeyCode == Enum.KeyCode.L then
+        tpForward(forwardDistance)
     end
 end)
 
-print("[TP Location Suite] Loaded successfully! Press 'K' to toggle UI.")
+print("[TP Location Suite] Loaded! Press 'K' to toggle UI | Press 'L' to TP Forward.")
