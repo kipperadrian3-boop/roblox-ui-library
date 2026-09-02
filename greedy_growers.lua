@@ -23,6 +23,7 @@ local int = lib:CreateInterface("Greedy Growers", "Auto Seed Collection", "", "b
 
 -- Tabs
 local collectTab = int:CreateTab("Auto Collect", "Conveyor Belt Automation", "op", true)
+local fruitsTab = int:CreateTab("Fruits", "Fruit Farming", "op")
 local settingsTab = int:CreateTab("Settings", "UI Customization", "misc")
 
 -- Configuration State (JSON Auto-Saved by lib.lua)
@@ -136,6 +137,57 @@ task.spawn(function()
     end
 end)
 
+-- Auto Collect Fruits Loop
+task.spawn(function()
+    local Players = game:GetService("Players")
+    local LocalPlayer = Players.LocalPlayer
+
+    while true do
+        task.wait(0.01)
+        if Config.AutoCollectFruits then
+            local bigField = Workspace:FindFirstChild("BigField")
+            local playerPlots = bigField and bigField:FindFirstChild("PlayerPlots")
+            local myPlot = nil
+            
+            if playerPlots then
+                for _, plot in ipairs(playerPlots:GetChildren()) do
+                    if plot:GetAttribute("OwnerUserId") == LocalPlayer.UserId then
+                        myPlot = plot
+                        break
+                    end
+                end
+            end
+            
+            if myPlot then
+                local promptsToTrigger = {}
+                for _, desc in ipairs(myPlot:GetDescendants()) do
+                    if desc:IsA("ProximityPrompt") then
+                        local parent = desc.Parent
+                        if parent and parent.Parent and parent.Parent.Name == "FruitSpawns" then
+                            table.insert(promptsToTrigger, desc)
+                        end
+                    end
+                end
+                
+                for _, prompt in ipairs(promptsToTrigger) do
+                    if not Config.AutoCollectFruits then break end
+                    if fireproximityprompt then
+                        fireproximityprompt(prompt)
+                    else
+                        prompt.MaxActivationDistance = 9e9
+                        prompt.RequiresLineOfSight = false
+                        prompt.Exclusivity = Enum.ProximityPromptExclusivity.AlwaysShow
+                        prompt:InputHoldBegin()
+                        task.wait(prompt.HoldDuration + 0.05)
+                        prompt:InputHoldEnd()
+                    end
+                    task.wait(0.01)
+                end
+            end
+        end
+    end
+end)
+
 -- UI INTERFACE CREATION
 
 collectTab:CreateComment("--- Main Toggle ---")
@@ -192,6 +244,13 @@ for _, rarity in ipairs(RarityList) do
         end)
     end
 end
+
+-- TAB: FRUITS
+fruitsTab:CreateComment("--- Fruit Collection ---")
+fruitsTab:CreateToggleSwitch("Auto Collect Fruits", false, function(val)
+    Config.AutoCollectFruits = val
+    if val then lib:Notify("Farm", "Auto Collect Fruits Active!", 2.0) end
+end)
 
 -- TAB: SETTINGS
 local themeDrop = settingsTab:CreateDropDown("Select UI Theme", function() end)
