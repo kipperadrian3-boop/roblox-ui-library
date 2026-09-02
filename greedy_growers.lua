@@ -142,12 +142,12 @@ end)
 
 collectTab:CreateComment("--- Seed Selection ---")
 
--- Store references to the seed buttons so we can update their text
-local SeedButtons = {}
+-- Store references to the seed checkboxes so we can update their state
+local SeedCheckboxes = {}
 
 local SeedDropdown = collectTab:CreateDropDown("Select Seed", function() end)
 
--- Create the buttons in the Seed Dropdown
+-- Create the checkboxes in the Seed Dropdown
 local sortedSeeds = {}
 for seedName, _ in pairs(t.Seeds) do
     table.insert(sortedSeeds, seedName)
@@ -157,19 +157,11 @@ table.sort(sortedSeeds)
 for _, seedName in ipairs(sortedSeeds) do
     Config["Collect_" .. seedName] = false
     
-    local btn = SeedDropdown:AddButton("[ ] " .. seedName, function()
-        -- Toggle state
-        Config["Collect_" .. seedName] = not Config["Collect_" .. seedName]
-        
-        -- Update text based on new state
-        if Config["Collect_" .. seedName] then
-            SeedButtons[seedName].Text = "[X] " .. seedName
-        else
-            SeedButtons[seedName].Text = "[ ] " .. seedName
-        end
+    local chk = SeedDropdown:AddCheckbox(seedName, function(state)
+        Config["Collect_" .. seedName] = state
     end)
     
-    SeedButtons[seedName] = btn
+    SeedCheckboxes[seedName] = chk
 end
 
 collectTab:CreateComment("--- Rarity Selection ---")
@@ -188,17 +180,18 @@ for _, rarity in ipairs(RarityList) do
     end
     
     if hasSeedsInRarity then
-        RarityDropdown:AddButton("Select all " .. rarity, function()
-            -- Set all seeds of this rarity to true and update their buttons
+        RarityDropdown:AddCheckbox(rarity, function(state)
+            -- Set all seeds of this rarity to the new state and update their checkboxes
             for seedName, info in pairs(t.Seeds) do
                 if info.rarity == rarity then
-                    Config["Collect_" .. seedName] = true
-                    if SeedButtons[seedName] then
-                        SeedButtons[seedName].Text = "[X] " .. seedName
+                    Config["Collect_" .. seedName] = state
+                    if SeedCheckboxes[seedName] then
+                        SeedCheckboxes[seedName]:SetValue(state)
                     end
                 end
             end
-            lib:Notify("Selection", "Selected all " .. rarity .. " seeds!", 2.0)
+            local action = state and "Selected" or "Deselected"
+            lib:Notify("Selection", action .. " all " .. rarity .. " seeds!", 2.0)
         end)
     end
 end

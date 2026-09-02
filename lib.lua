@@ -1333,7 +1333,14 @@ function Library:CreateInterface(titleText, descText, discordLink, position, the
                     pcall(chkCallback, chkState)
                 end
 
-                return ChkFrame
+                return {
+                    Frame = ChkFrame,
+                    SetValue = function(self, val)
+                        if chkState ~= val then
+                            toggleChk()
+                        end
+                    end
+                }
             end
 
             return DropdownObj
