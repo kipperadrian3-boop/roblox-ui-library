@@ -1,196 +1,147 @@
 --[[
-    Roblox UI Library Framework - Glassmorphism Edition with Universal JSON Config Engine (lib.lua)
-    Supports:
-      - Universal JSON Auto-Save & Auto-Load (writefile / readfile / HttpService)
-      - Themes & Glass Transparency
-      - Notifications, Keybinds, Switches, Sliders, Dropdowns & Animations
+    Universal Premium UI Library (lib.lua)
+    Engineered for Roblox Exploits with Full JSON Auto-Save & Nested Dynamic Sections
 ]]
 
-local TweenService = game:GetService("TweenService")
-local UserInputService = game:GetService("UserInputService")
-local HttpService = game:GetService("HttpService")
-local CoreGui = game:GetService("CoreGui")
-local Players = game:GetService("Players")
+local cloneref = (cloneref or clonereference or function(instance: any)
+    return instance
+end)
+
+local CoreGui: CoreGui = cloneref(game:GetService("CoreGui"))
+local Players: Players = cloneref(game:GetService("Players"))
+local TweenService: TweenService = cloneref(game:GetService("TweenService"))
+local UserInputService: UserInputService = cloneref(game:GetService("UserInputService"))
+local HttpService: HttpService = cloneref(game:GetService("HttpService"))
+local RunService: RunService = cloneref(game:GetService("RunService"))
+
+local LocalPlayer = Players.LocalPlayer
 
 local Library = {}
+Library.ActiveInterfaces = {}
+Library.CurrentTheme = nil
 
--- Preset Themes with Glass Colors
+-- -------------------------------------------------------------
+-- THEME DEFINITIONS
+-- -------------------------------------------------------------
 local DefaultThemes = {
+    emerald = {
+        MainBg = Color3.fromRGB(18, 22, 26),
+        HeaderBg = Color3.fromRGB(12, 16, 20),
+        SidebarBg = Color3.fromRGB(14, 18, 22),
+        CardBg = Color3.fromRGB(24, 30, 36),
+        TextColor = Color3.fromRGB(240, 245, 250),
+        SubText = Color3.fromRGB(140, 160, 180),
+        Accent = Color3.fromRGB(46, 204, 113),
+        AccentText = Color3.fromRGB(255, 255, 255),
+        Border = Color3.fromRGB(35, 45, 55)
+    },
+    cyber = {
+        MainBg = Color3.fromRGB(15, 15, 25),
+        HeaderBg = Color3.fromRGB(10, 10, 18),
+        SidebarBg = Color3.fromRGB(12, 12, 20),
+        CardBg = Color3.fromRGB(22, 22, 36),
+        TextColor = Color3.fromRGB(235, 240, 255),
+        SubText = Color3.fromRGB(130, 140, 180),
+        Accent = Color3.fromRGB(0, 230, 255),
+        AccentText = Color3.fromRGB(10, 10, 20),
+        Border = Color3.fromRGB(30, 35, 60)
+    },
     royal = {
         MainBg = Color3.fromRGB(20, 22, 32),
         HeaderBg = Color3.fromRGB(14, 15, 22),
         SidebarBg = Color3.fromRGB(14, 15, 22),
         CardBg = Color3.fromRGB(28, 31, 44),
+        TextColor = Color3.fromRGB(245, 245, 250),
+        SubText = Color3.fromRGB(150, 155, 180),
         Accent = Color3.fromRGB(130, 85, 245),
         AccentText = Color3.fromRGB(255, 255, 255),
-        Stroke = Color3.fromRGB(85, 70, 140),
-        TextColor = Color3.fromRGB(245, 245, 250),
-        SubText = Color3.fromRGB(160, 165, 195)
+        Border = Color3.fromRGB(40, 44, 62)
     },
     dark = {
-        MainBg = Color3.fromRGB(18, 18, 18),
-        HeaderBg = Color3.fromRGB(12, 12, 12),
-        SidebarBg = Color3.fromRGB(12, 12, 12),
-        CardBg = Color3.fromRGB(26, 26, 26),
-        Accent = Color3.fromRGB(0, 140, 240),
-        AccentText = Color3.fromRGB(255, 255, 255),
-        Stroke = Color3.fromRGB(60, 60, 60),
+        MainBg = Color3.fromRGB(22, 22, 22),
+        HeaderBg = Color3.fromRGB(16, 16, 16),
+        SidebarBg = Color3.fromRGB(18, 18, 18),
+        CardBg = Color3.fromRGB(28, 28, 28),
         TextColor = Color3.fromRGB(240, 240, 240),
-        SubText = Color3.fromRGB(150, 150, 150)
-    },
-    emerald = {
-        MainBg = Color3.fromRGB(16, 24, 20),
-        HeaderBg = Color3.fromRGB(11, 17, 14),
-        SidebarBg = Color3.fromRGB(11, 17, 14),
-        CardBg = Color3.fromRGB(22, 34, 28),
-        Accent = Color3.fromRGB(0, 200, 120),
-        AccentText = Color3.fromRGB(255, 255, 255),
-        Stroke = Color3.fromRGB(50, 95, 70),
-        TextColor = Color3.fromRGB(235, 248, 240),
-        SubText = Color3.fromRGB(140, 175, 155)
-    },
-    cyber = {
-        MainBg = Color3.fromRGB(15, 20, 28),
-        HeaderBg = Color3.fromRGB(10, 14, 20),
-        SidebarBg = Color3.fromRGB(10, 14, 20),
-        CardBg = Color3.fromRGB(22, 29, 40),
-        Accent = Color3.fromRGB(0, 220, 255),
-        AccentText = Color3.fromRGB(10, 14, 20),
-        Stroke = Color3.fromRGB(0, 160, 210),
-        TextColor = Color3.fromRGB(235, 245, 255),
-        SubText = Color3.fromRGB(140, 170, 200)
+        SubText = Color3.fromRGB(150, 150, 150),
+        Accent = Color3.fromRGB(255, 255, 255),
+        AccentText = Color3.fromRGB(20, 20, 20),
+        Border = Color3.fromRGB(45, 45, 45)
     },
     midnight = {
-        MainBg = Color3.fromRGB(14, 15, 22),
-        HeaderBg = Color3.fromRGB(9, 10, 15),
-        SidebarBg = Color3.fromRGB(9, 10, 15),
-        CardBg = Color3.fromRGB(20, 22, 32),
-        Accent = Color3.fromRGB(255, 110, 180),
+        MainBg = Color3.fromRGB(10, 12, 18),
+        HeaderBg = Color3.fromRGB(6, 8, 12),
+        SidebarBg = Color3.fromRGB(8, 10, 15),
+        CardBg = Color3.fromRGB(16, 20, 30),
+        TextColor = Color3.fromRGB(230, 235, 245),
+        SubText = Color3.fromRGB(120, 130, 160),
+        Accent = Color3.fromRGB(80, 140, 255),
         AccentText = Color3.fromRGB(255, 255, 255),
-        Stroke = Color3.fromRGB(90, 50, 95),
-        TextColor = Color3.fromRGB(245, 240, 250),
-        SubText = Color3.fromRGB(160, 145, 175)
+        Border = Color3.fromRGB(25, 32, 48)
     },
     blood = {
-        MainBg = Color3.fromRGB(24, 14, 16),
-        HeaderBg = Color3.fromRGB(16, 8, 10),
-        SidebarBg = Color3.fromRGB(16, 8, 10),
-        CardBg = Color3.fromRGB(34, 18, 22),
-        Accent = Color3.fromRGB(235, 45, 60),
+        MainBg = Color3.fromRGB(22, 14, 16),
+        HeaderBg = Color3.fromRGB(15, 9, 10),
+        SidebarBg = Color3.fromRGB(17, 10, 12),
+        CardBg = Color3.fromRGB(32, 18, 22),
+        TextColor = Color3.fromRGB(250, 240, 240),
+        SubText = Color3.fromRGB(180, 140, 145),
+        Accent = Color3.fromRGB(235, 60, 75),
         AccentText = Color3.fromRGB(255, 255, 255),
-        Stroke = Color3.fromRGB(100, 40, 48),
-        TextColor = Color3.fromRGB(250, 240, 242),
-        SubText = Color3.fromRGB(180, 140, 145)
+        Border = Color3.fromRGB(55, 25, 32)
     },
     gold = {
         MainBg = Color3.fromRGB(24, 22, 16),
-        HeaderBg = Color3.fromRGB(16, 14, 10),
-        SidebarBg = Color3.fromRGB(16, 14, 10),
-        CardBg = Color3.fromRGB(34, 30, 20),
-        Accent = Color3.fromRGB(240, 185, 45),
-        AccentText = Color3.fromRGB(20, 15, 5),
-        Stroke = Color3.fromRGB(105, 85, 38),
-        TextColor = Color3.fromRGB(250, 245, 235),
-        SubText = Color3.fromRGB(180, 165, 135)
+        HeaderBg = Color3.fromRGB(16, 15, 10),
+        SidebarBg = Color3.fromRGB(19, 17, 12),
+        CardBg = Color3.fromRGB(35, 31, 22),
+        TextColor = Color3.fromRGB(250, 248, 240),
+        SubText = Color3.fromRGB(185, 175, 145),
+        Accent = Color3.fromRGB(245, 185, 45),
+        AccentText = Color3.fromRGB(20, 18, 10),
+        Border = Color3.fromRGB(60, 52, 30)
     },
     neon = {
-        MainBg = Color3.fromRGB(18, 12, 28),
-        HeaderBg = Color3.fromRGB(12, 8, 20),
-        SidebarBg = Color3.fromRGB(12, 8, 20),
-        CardBg = Color3.fromRGB(28, 18, 42),
-        Accent = Color3.fromRGB(50, 255, 150),
-        AccentText = Color3.fromRGB(10, 20, 15),
-        Stroke = Color3.fromRGB(120, 50, 200),
-        TextColor = Color3.fromRGB(245, 240, 255),
-        SubText = Color3.fromRGB(175, 145, 205)
+        MainBg = Color3.fromRGB(14, 14, 18),
+        HeaderBg = Color3.fromRGB(9, 9, 12),
+        SidebarBg = Color3.fromRGB(11, 11, 15),
+        CardBg = Color3.fromRGB(22, 22, 30),
+        TextColor = Color3.fromRGB(245, 245, 250),
+        SubText = Color3.fromRGB(145, 145, 170),
+        Accent = Color3.fromRGB(255, 0, 128),
+        AccentText = Color3.fromRGB(255, 255, 255),
+        Border = Color3.fromRGB(45, 30, 50)
     }
 }
 
--- CONFIG FILE SYSTEM UTILITIES
-local CONFIG_FOLDER = "AdminSuite_Configs"
+-- Default active theme
+Library.CurrentTheme = DefaultThemes.emerald
 
-local function isFileSystemSupported()
-    return (type(writefile) == "function" and type(readfile) == "function")
-end
-
-local function getSanitizedFileName(title)
-    local str = tostring(title or "Default_Suite"):gsub("[%s%W]", "_")
-    return CONFIG_FOLDER .. "/" .. str .. ".json"
-end
-
-local function saveJSON(title, dataTable)
-    if not isFileSystemSupported() then return false end
-    local success, err = pcall(function()
-        if type(isfolder) == "function" and not isfolder(CONFIG_FOLDER) then
-            if type(makefolder) == "function" then
-                makefolder(CONFIG_FOLDER)
-            end
-        end
-        local path = getSanitizedFileName(title)
-        local encoded = HttpService:JSONEncode(dataTable)
-        writefile(path, encoded)
-    end)
-    return success
-end
-
-local function loadJSON(title)
-    if not isFileSystemSupported() then return nil end
-    local result = nil
-    pcall(function()
-        local path = getSanitizedFileName(title)
-        if type(isfile) == "function" and isfile(path) then
-            local content = readfile(path)
-            result = HttpService:JSONDecode(content)
-        end
-    end)
-    return result
-end
-
+-- -------------------------------------------------------------
+-- HELPER FUNCTIONS
+-- -------------------------------------------------------------
 local function getParentGui()
-    if gethui then
-        local success, res = pcall(gethui)
-        if success and res then return res end
-    end
-
-    local testOk = pcall(function()
-        local t = Instance.new("ScreenGui")
-        t.Name = "TestParentGui"
-        t.Parent = CoreGui
-        t:Destroy()
+    local success, result = pcall(function()
+        return CoreGui:FindFirstChildWhichIsA("ScreenGui") and CoreGui or LocalPlayer:WaitForChild("PlayerGui")
     end)
-    if testOk then
-        return CoreGui
-    end
-
-    local pgui = Players.LocalPlayer and (Players.LocalPlayer:FindFirstChild("PlayerGui") or Players.LocalPlayer:WaitForChild("PlayerGui", 3))
-    if pgui then return pgui end
-    return CoreGui
+    if success and result then return result end
+    return LocalPlayer:WaitForChild("PlayerGui")
 end
 
-local function create(instanceType, properties)
-    local inst = Instance.new(instanceType)
-    for prop, val in pairs(properties) do
-        if prop ~= "Parent" then
-            inst[prop] = val
-        end
-    end
-    if properties.Parent then
-        local ok = pcall(function()
-            inst.Parent = properties.Parent
-        end)
-        if not ok and Players.LocalPlayer and Players.LocalPlayer:FindFirstChild("PlayerGui") then
-            pcall(function()
-                inst.Parent = Players.LocalPlayer.PlayerGui
-            end)
-        end
+local function create(className, properties)
+    local inst = Instance.new(className)
+    for prop, val in pairs(properties or {}) do
+        inst[prop] = val
     end
     return inst
 end
 
--- Notification Toast Container
+-- -------------------------------------------------------------
+-- NOTIFICATION SYSTEM
+-- -------------------------------------------------------------
 local NotificationContainer = nil
 
-function Library:Notify(title, message, duration, icon)
+function Library:Notify(title, message, duration)
     duration = duration or 3.5
     local parentGui = getParentGui()
 
@@ -219,22 +170,25 @@ function Library:Notify(title, message, duration, icon)
         end
     end
 
+    local theme = Library.CurrentTheme or DefaultThemes.emerald
+
     local Toast = create("Frame", {
         Size = UDim2.new(1, 0, 0, 56),
-        BackgroundColor3 = Color3.fromRGB(20, 22, 32),
+        Position = UDim2.new(1, 100, 0, 0),
+        BackgroundColor3 = theme.MainBg,
         BackgroundTransparency = 0.15,
         BorderSizePixel = 0,
         Parent = NotificationContainer
     })
     create("UICorner", { CornerRadius = UDim.new(0, 8), Parent = Toast })
-    local Stroke = create("UIStroke", { Color = Color3.fromRGB(130, 85, 245), Thickness = 1.5, Parent = Toast })
+    local Stroke = create("UIStroke", { Color = theme.Accent, Thickness = 1.5, Parent = Toast })
 
     local TitleLabel = create("TextLabel", {
         Size = UDim2.new(1, -20, 0, 20),
         Position = UDim2.new(0, 12, 0, 6),
         BackgroundTransparency = 1,
         Text = title or "Notification",
-        TextColor3 = Color3.fromRGB(255, 255, 255),
+        TextColor3 = theme.TextColor,
         TextSize = 13,
         Font = Enum.Font.GothamBold,
         TextXAlignment = Enum.TextXAlignment.Left,
@@ -246,217 +200,170 @@ function Library:Notify(title, message, duration, icon)
         Position = UDim2.new(0, 12, 0, 26),
         BackgroundTransparency = 1,
         Text = message or "",
-        TextColor3 = Color3.fromRGB(170, 175, 205),
+        TextColor3 = theme.SubText,
         TextSize = 11,
         Font = Enum.Font.Gotham,
-        TextWrapped = true,
         TextXAlignment = Enum.TextXAlignment.Left,
+        TextWrapped = true,
         Parent = Toast
     })
 
     -- Slide in animation
-    Toast.Position = UDim2.new(1, 300, 0, 0)
+    Toast.Position = UDim2.new(1, 100, 0, 0)
     TweenService:Create(Toast, TweenInfo.new(0.3, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
         Position = UDim2.new(0, 0, 0, 0)
     }):Play()
 
-    task.spawn(function()
-        task.wait(duration)
-        local fadeOut = TweenService:Create(Toast, TweenInfo.new(0.3, Enum.EasingStyle.Quart, Enum.EasingDirection.In), {
-            Position = UDim2.new(1, 300, 0, 0),
-            BackgroundTransparency = 1
-        })
-        fadeOut:Play()
-        fadeOut.Completed:Connect(function()
-            Toast:Destroy()
-        end)
+    task.delay(duration, function()
+        if Toast and Toast.Parent then
+            local tw = TweenService:Create(Toast, TweenInfo.new(0.3, Enum.EasingStyle.Quart, Enum.EasingDirection.In), {
+                Position = UDim2.new(1, 100, 0, 0),
+                BackgroundTransparency = 1
+            })
+            tw:Play()
+            tw.Completed:Connect(function()
+                Toast:Destroy()
+            end)
+        end
     end)
 end
 
-function Library:CreateInterface(titleText, descText, discordLink, position, themeName, bgTransparency)
-    local suiteTitle = titleText or "Default_Suite"
-    local themeKey = tostring(themeName or "royal"):lower()
-    local theme = DefaultThemes[themeKey] or DefaultThemes.royal
-    local glassTransparency = bgTransparency or 0.25
+-- -------------------------------------------------------------
+-- CREATE INTERFACE
+-- -------------------------------------------------------------
+function Library:CreateInterface(suiteTitle, suiteDesc, icon, position, defaultTheme, defaultTransparency)
+    local themeKey = tostring(defaultTheme or "emerald"):lower()
+    local theme = DefaultThemes[themeKey] or DefaultThemes.emerald
+    Library.CurrentTheme = theme
 
-    local parentGui = getParentGui()
+    local glassTransparency = defaultTransparency or 0.15
+    local themeUpdaters = {}
 
-    -- Clean up ALL previous instances in both CoreGui and PlayerGui
-    pcall(function()
-        for _, child in ipairs(CoreGui:GetChildren()) do
-            if child.Name == "AdminSuiteUI" then child:Destroy() end
-        end
-    end)
-    pcall(function()
-        local playerGui = Players.LocalPlayer and Players.LocalPlayer:FindFirstChild("PlayerGui")
-        if playerGui then
-            for _, child in ipairs(playerGui:GetChildren()) do
-                if child.Name == "AdminSuiteUI" then child:Destroy() end
+    local configFileName = string.gsub(string.lower(suiteTitle or "admin"), "%s+", "_") .. "_config.json"
+    local ConfigState = {}
+
+    local function loadSavedConfig()
+        if readfile and isfile and isfile(configFileName) then
+            local success, content = pcall(readfile, configFileName)
+            if success and content and #content > 0 then
+                local decodeSuccess, data = pcall(function()
+                    return HttpService:JSONDecode(content)
+                end)
+                if decodeSuccess and type(data) == "table" then
+                    ConfigState = data
+                end
             end
         end
-    end)
+    end
 
-    local themeUpdaters = {}
-    local toggleKey = Enum.KeyCode.K
+    local function autoSaveConfig()
+        if writefile then
+            pcall(function()
+                writefile(configFileName, HttpService:JSONEncode(ConfigState))
+            end)
+        end
+    end
 
+    loadSavedConfig()
+
+    local parentGui = getParentGui()
     local ScreenGui = create("ScreenGui", {
-        Name = "AdminSuiteUI",
+        Name = "AdminSuiteUI_" .. tostring(math.random(1000, 9999)),
         ResetOnSpawn = false,
-        Enabled = true,
         ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
         Parent = parentGui
     })
 
-    -- Main Frame (Glassmorphism Styled)
+    -- Main Window Frame
     local MainFrame = create("Frame", {
         Name = "MainFrame",
-        Size = UDim2.new(0, 650, 0, 440),
-        Position = UDim2.new(0.5, -325, 0.5, -220),
+        Size = UDim2.new(0, 640, 0, 400),
+        Position = UDim2.new(0.5, -320, 0.5, -200),
         BackgroundColor3 = theme.MainBg,
         BackgroundTransparency = glassTransparency,
         BorderSizePixel = 0,
-        Active = false,
-        Draggable = false,
-        Visible = true,
+        ClipsDescendants = false,
         Parent = ScreenGui
     })
-
-    create("UICorner", { CornerRadius = UDim.new(0, 12), Parent = MainFrame })
-    local MainStroke = create("UIStroke", { Color = theme.Stroke, Thickness = 1.8, Parent = MainFrame })
-
-    -- Glass Gradient Accent Overlay
-    create("UIGradient", {
-        Color = ColorSequence.new({
-            ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 255, 255)),
-            ColorSequenceKeypoint.new(1, Color3.fromRGB(180, 180, 200))
-        }),
-        Rotation = 45,
-        Parent = MainFrame
-    })
-
-    table.insert(themeUpdaters, function(t)
-        MainFrame.BackgroundColor3 = t.MainBg
-        MainStroke.Color = t.Stroke
-    end)
-
-    -- Toggle UI with Key
-    UserInputService.InputBegan:Connect(function(input, gameProcessed)
-        if not gameProcessed and input.KeyCode == toggleKey then
-            MainFrame.Visible = not MainFrame.Visible
-        end
-    end)
+    create("UICorner", { CornerRadius = UDim.new(0, 8), Parent = MainFrame })
+    local MainStroke = create("UIStroke", { Color = theme.Border, Thickness = 1.5, Parent = MainFrame })
 
     -- Top Header Bar
-    local Header = create("Frame", {
-        Name = "Header",
-        Size = UDim2.new(1, 0, 0, 48),
+    local TopBar = create("Frame", {
+        Name = "TopBar",
+        Size = UDim2.new(1, 0, 0, 44),
         BackgroundColor3 = theme.HeaderBg,
-        BackgroundTransparency = math.clamp(glassTransparency - 0.1, 0, 1),
+        BackgroundTransparency = math.clamp(glassTransparency - 0.05, 0, 1),
         BorderSizePixel = 0,
         Parent = MainFrame
     })
-    create("UICorner", { CornerRadius = UDim.new(0, 12), Parent = Header })
+    create("UICorner", { CornerRadius = UDim.new(0, 8), Parent = TopBar })
 
     local TitleLabel = create("TextLabel", {
         Name = "Title",
-        Size = UDim2.new(0, 320, 0, 22),
-        Position = UDim2.new(0, 15, 0, 6),
+        Size = UDim2.new(0.6, 0, 0, 22),
+        Position = UDim2.new(0, 14, 0, 4),
         BackgroundTransparency = 1,
-        Text = titleText or "Admin Panel",
+        Text = suiteTitle or "Admin Suite",
+        TextColor3 = theme.TextColor,
+        TextSize = 14,
+        Font = Enum.Font.GothamBold,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        Parent = TopBar
+    })
+
+    local DescLabel = create("TextLabel", {
+        Name = "Subtitle",
+        Size = UDim2.new(0.6, 0, 0, 16),
+        Position = UDim2.new(0, 14, 0, 24),
+        BackgroundTransparency = 1,
+        Text = suiteDesc or "Universal Automation",
+        TextColor3 = theme.SubText,
+        TextSize = 11,
+        Font = Enum.Font.Gotham,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        Parent = TopBar
+    })
+
+    -- Top Bar Controls (Minimize & Close)
+    local Controls = create("Frame", {
+        Size = UDim2.new(0, 80, 1, 0),
+        Position = UDim2.new(1, -85, 0, 0),
+        BackgroundTransparency = 1,
+        Parent = TopBar
+    })
+
+    local MinimizeBtn = create("TextButton", {
+        Size = UDim2.new(0, 30, 0, 30),
+        Position = UDim2.new(0, 5, 0.5, -15),
+        BackgroundColor3 = theme.CardBg,
+        BackgroundTransparency = 0.5,
+        Text = "-",
         TextColor3 = theme.TextColor,
         TextSize = 16,
         Font = Enum.Font.GothamBold,
-        TextXAlignment = Enum.TextXAlignment.Left,
-        Parent = Header
-    })
-
-    local SubtitleLabel = create("TextLabel", {
-        Name = "Subtitle",
-        Size = UDim2.new(0, 320, 0, 16),
-        Position = UDim2.new(0, 15, 0, 26),
-        BackgroundTransparency = 1,
-        Text = descText or "Admin & Management Suite",
-        TextColor3 = theme.SubText,
-        TextSize = 12,
-        Font = Enum.Font.Gotham,
-        TextXAlignment = Enum.TextXAlignment.Left,
-        Parent = Header
-    })
-
-    table.insert(themeUpdaters, function(t)
-        Header.BackgroundColor3 = t.HeaderBg
-        TitleLabel.TextColor3 = t.TextColor
-        SubtitleLabel.TextColor3 = t.SubText
-    end)
-
-    -- Control Buttons (Minimize, Close)
-    local CloseBtn = create("TextButton", {
-        Name = "CloseBtn",
-        Size = UDim2.new(0, 28, 0, 28),
-        Position = UDim2.new(1, -36, 0, 10),
-        BackgroundColor3 = Color3.fromRGB(45, 22, 28),
-        Text = "✕",
-        TextColor3 = Color3.fromRGB(255, 90, 90),
-        TextSize = 14,
-        Font = Enum.Font.GothamBold,
-        Parent = Header
-    })
-    create("UICorner", { CornerRadius = UDim.new(0, 6), Parent = CloseBtn })
-    CloseBtn.MouseButton1Click:Connect(function()
-        ScreenGui:Destroy()
-    end)
-
-    local Minimized = false
-    local MinimizeBtn = create("TextButton", {
-        Name = "MinimizeBtn",
-        Size = UDim2.new(0, 28, 0, 28),
-        Position = UDim2.new(1, -70, 0, 10),
-        BackgroundColor3 = theme.CardBg,
-        Text = "─",
-        TextColor3 = theme.SubText,
-        TextSize = 14,
-        Font = Enum.Font.GothamBold,
-        Parent = Header
+        Parent = Controls
     })
     create("UICorner", { CornerRadius = UDim.new(0, 6), Parent = MinimizeBtn })
 
-    -- Discord Button
-    local DiscordBtn = nil
-    if discordLink and discordLink ~= "" then
-        DiscordBtn = create("TextButton", {
-            Name = "DiscordBtn",
-            Size = UDim2.new(0, 75, 0, 28),
-            Position = UDim2.new(1, -152, 0, 10),
-            BackgroundColor3 = theme.Accent,
-            Text = "Discord",
-            TextColor3 = theme.AccentText,
-            TextSize = 12,
-            Font = Enum.Font.GothamMedium,
-            Parent = Header
-        })
-        create("UICorner", { CornerRadius = UDim.new(0, 6), Parent = DiscordBtn })
+    local CloseBtn = create("TextButton", {
+        Size = UDim2.new(0, 30, 0, 30),
+        Position = UDim2.new(0, 45, 0.5, -15),
+        BackgroundColor3 = theme.CardBg,
+        BackgroundTransparency = 0.5,
+        Text = "×",
+        TextColor3 = theme.TextColor,
+        TextSize = 18,
+        Font = Enum.Font.GothamBold,
+        Parent = Controls
+    })
+    create("UICorner", { CornerRadius = UDim.new(0, 6), Parent = CloseBtn })
 
-        table.insert(themeUpdaters, function(t)
-            DiscordBtn.BackgroundColor3 = t.Accent
-            DiscordBtn.TextColor3 = t.AccentText
-        end)
-
-        DiscordBtn.MouseButton1Click:Connect(function()
-            if setclipboard then
-                setclipboard(discordLink)
-                DiscordBtn.Text = "Copied!"
-                Library:Notify("Clipboard", "Discord link copied to clipboard!", 2.5)
-                task.wait(1.5)
-                DiscordBtn.Text = "Discord"
-            end
-        end)
-    end
-
-    -- Tab Bar (Left side panel)
-    local TabBar = create("ScrollingFrame", {
-        Name = "TabBar",
-        Size = UDim2.new(0, 160, 1, -58),
-        Position = UDim2.new(0, 10, 0, 53),
+    -- Sidebar (Tabs list)
+    local Sidebar = create("ScrollingFrame", {
+        Name = "Sidebar",
+        Size = UDim2.new(0, 150, 1, -52),
+        Position = UDim2.new(0, 8, 0, 48),
         BackgroundColor3 = theme.SidebarBg,
         BackgroundTransparency = math.clamp(glassTransparency - 0.05, 0, 1),
         BorderSizePixel = 0,
@@ -465,226 +372,285 @@ function Library:CreateInterface(titleText, descText, discordLink, position, the
         AutomaticCanvasSize = Enum.AutomaticSize.Y,
         Parent = MainFrame
     })
-    create("UICorner", { CornerRadius = UDim.new(0, 8), Parent = TabBar })
-    create("UIListLayout", {
+    create("UICorner", { CornerRadius = UDim.new(0, 6), Parent = Sidebar })
+    local SidebarList = create("UIListLayout", {
         SortOrder = Enum.SortOrder.LayoutOrder,
-        Padding = UDim.new(0, 5),
-        Parent = TabBar
+        Padding = UDim.new(0, 4),
+        HorizontalAlignment = Enum.HorizontalAlignment.Center,
+        Parent = Sidebar
     })
     create("UIPadding", {
         PaddingTop = UDim.new(0, 6),
         PaddingBottom = UDim.new(0, 6),
         PaddingLeft = UDim.new(0, 6),
         PaddingRight = UDim.new(0, 6),
-        Parent = TabBar
+        Parent = Sidebar
     })
 
-    table.insert(themeUpdaters, function(t)
-        TabBar.BackgroundColor3 = t.SidebarBg
-    end)
-
-    -- Content Container (Right side)
-    local ContentFolder = create("Folder", {
-        Name = "ContentFolder",
+    -- Content Area Container
+    local ContentContainer = create("Frame", {
+        Name = "ContentContainer",
+        Size = UDim2.new(1, -172, 1, -52),
+        Position = UDim2.new(0, 164, 0, 48),
+        BackgroundTransparency = 1,
         Parent = MainFrame
     })
 
-    -- Universal JSON Config State for this Interface
-    local LoadedConfigData = loadJSON(suiteTitle) or {}
-    local ActiveConfigState = LoadedConfigData or {}
-
-    local InterfaceObj = {
-        ScreenGui = ScreenGui,
-        MainFrame = MainFrame,
-        TabBar = TabBar,
-        ContentFolder = ContentFolder,
-        Tabs = {},
-        ActiveTab = nil,
-        Theme = theme,
-        GlassTransparency = glassTransparency,
-        SuiteTitle = suiteTitle,
-        ConfigState = ActiveConfigState
-    }
-
-    -- Auto-save trigger
-    local function autoSaveConfig()
-        InterfaceObj.ConfigState.Theme = InterfaceObj.ThemeName or themeKey
-        InterfaceObj.ConfigState.Transparency = InterfaceObj.GlassTransparency
-        saveJSON(suiteTitle, InterfaceObj.ConfigState)
-    end
-
-    -- Restore saved Theme & Transparency if present in JSON
-    if LoadedConfigData.Theme then
-        local savedThemeKey = tostring(LoadedConfigData.Theme):lower()
-        if DefaultThemes[savedThemeKey] then
-            themeKey = savedThemeKey
-            theme = DefaultThemes[savedThemeKey]
-            InterfaceObj.Theme = theme
-            InterfaceObj.ThemeName = savedThemeKey
+    -- Dragging Logic
+    local isDragging = false
+    local dragInput, dragStart, startPos
+    TopBar.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            isDragging = true
+            dragStart = input.Position
+            startPos = MainFrame.Position
+            input.Changed:Connect(function()
+                if input.UserInputState == Enum.UserInputState.End then
+                    isDragging = false
+                end
+            end)
         end
-    end
-    if LoadedConfigData.Transparency then
-        glassTransparency = math.clamp(tonumber(LoadedConfigData.Transparency) or 0.25, 0, 0.9)
-        InterfaceObj.GlassTransparency = glassTransparency
-    end
-
-    if LoadedConfigData and next(LoadedConfigData) then
-        Library:Notify("Config Loaded", "Restored JSON settings for " .. suiteTitle, 2.5)
-    end
-
-    -- Toggle Minimize Animation
-    MinimizeBtn.MouseButton1Click:Connect(function()
-        Minimized = not Minimized
-        if Minimized then
-            TweenService:Create(MainFrame, TweenInfo.new(0.25, Enum.EasingStyle.Quart), { Size = UDim2.new(0, 650, 0, 48) }):Play()
-            TabBar.Visible = false
-            for _, t in ipairs(InterfaceObj.Tabs) do
-                t.TabContent.Visible = false
-            end
-        else
-            TweenService:Create(MainFrame, TweenInfo.new(0.25, Enum.EasingStyle.Quart), { Size = UDim2.new(0, 650, 0, 440) }):Play()
-            task.wait(0.12)
-            TabBar.Visible = true
-            if InterfaceObj.ActiveTab and InterfaceObj.ActiveTab.Activate then
-                InterfaceObj.ActiveTab.Activate()
-            end
+    end)
+    TopBar.InputChanged:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+            dragInput = input
+        end
+    end)
+    UserInputService.InputChanged:Connect(function(input)
+        if input == dragInput and isDragging then
+            local delta = input.Position - dragStart
+            MainFrame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
         end
     end)
 
-    function InterfaceObj:SetTransparency(transparencyVal)
-        transparencyVal = math.clamp(transparencyVal or 0.25, 0, 0.9)
-        InterfaceObj.GlassTransparency = transparencyVal
-        MainFrame.BackgroundTransparency = transparencyVal
-        Header.BackgroundTransparency = math.clamp(transparencyVal - 0.1, 0, 1)
-        TabBar.BackgroundTransparency = math.clamp(transparencyVal - 0.05, 0, 1)
-        autoSaveConfig()
-    end
+    -- Toggle GUI Keybind ('K')
+    local isGuiVisible = true
+    UserInputService.InputBegan:Connect(function(input, gameProcessed)
+        if not gameProcessed and input.KeyCode == Enum.KeyCode.K then
+            isGuiVisible = not isGuiVisible
+            MainFrame.Visible = isGuiVisible
+        end
+    end)
+
+    -- Minimize Toggle
+    local isMinimized = false
+    MinimizeBtn.MouseButton1Click:Connect(function()
+        isMinimized = not isMinimized
+        if isMinimized then
+            TweenService:Create(MainFrame, TweenInfo.new(0.25, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
+                Size = UDim2.new(0, 640, 0, 44)
+            }):Play()
+            Sidebar.Visible = false
+            ContentContainer.Visible = false
+        else
+            TweenService:Create(MainFrame, TweenInfo.new(0.25, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
+                Size = UDim2.new(0, 640, 0, 400)
+            }):Play()
+            task.delay(0.15, function()
+                if not isMinimized then
+                    Sidebar.Visible = true
+                    ContentContainer.Visible = true
+                end
+            end)
+        end
+    end)
+
+    CloseBtn.MouseButton1Click:Connect(function()
+        ScreenGui:Destroy()
+    end)
+
+    -- Interface Object State
+    local InterfaceObj = {
+        Theme = theme,
+        ThemeName = themeKey,
+        Tabs = {},
+        ActiveTab = nil,
+        ConfigState = ConfigState
+    }
 
     function InterfaceObj:SetTheme(newThemeName)
-        local key = tostring(newThemeName or "royal"):lower()
-        local t = DefaultThemes[key] or DefaultThemes.royal
+        local key = tostring(newThemeName or "emerald"):lower()
+        local t = DefaultThemes[key] or DefaultThemes.emerald
         InterfaceObj.Theme = t
         InterfaceObj.ThemeName = key
         theme = t
         Library.CurrentTheme = t
+
+        MainFrame.BackgroundColor3 = t.MainBg
+        MainStroke.Color = t.Border
+        TopBar.BackgroundColor3 = t.HeaderBg
+        TitleLabel.TextColor3 = t.TextColor
+        DescLabel.TextColor3 = t.SubText
+        MinimizeBtn.BackgroundColor3 = t.CardBg
+        MinimizeBtn.TextColor3 = t.TextColor
+        CloseBtn.BackgroundColor3 = t.CardBg
+        CloseBtn.TextColor3 = t.TextColor
+        Sidebar.BackgroundColor3 = t.SidebarBg
+
         for _, updater in ipairs(themeUpdaters) do
             pcall(updater, t)
         end
+
         if InterfaceObj.ActiveTab and InterfaceObj.ActiveTab.Activate then
             InterfaceObj.ActiveTab.Activate()
         end
         autoSaveConfig()
     end
 
-    function InterfaceObj:SaveConfig()
-        return saveJSON(suiteTitle, InterfaceObj.ConfigState)
+    function InterfaceObj:SetTransparency(val)
+        val = math.clamp(tonumber(val) or 0.15, 0, 0.95)
+        glassTransparency = val
+        MainFrame.BackgroundTransparency = glassTransparency
+        TopBar.BackgroundTransparency = math.clamp(glassTransparency - 0.05, 0, 1)
+        Sidebar.BackgroundTransparency = math.clamp(glassTransparency - 0.05, 0, 1)
     end
 
-    function InterfaceObj:LoadConfig()
-        local data = loadJSON(suiteTitle)
-        if data then
-            InterfaceObj.ConfigState = data
-            return data
-        end
-        return nil
-    end
+    -- -------------------------------------------------------------
+    -- RECURSIVE ELEMENT BUILDER ENGINE
+    -- -------------------------------------------------------------
+    local function createElementBuilder(targetContainer, tabName, parentSection)
+        local Builder = {}
 
-    function InterfaceObj:CreateTab(tabName, tabDesc, icon, isDefault)
-        local TabBtn = create("TextButton", {
-            Name = "TabBtn_" .. tabName,
-            Size = UDim2.new(1, 0, 0, 36),
-            BackgroundColor3 = theme.CardBg,
-            BackgroundTransparency = math.clamp(glassTransparency - 0.1, 0, 1),
-            Text = "  " .. tabName,
-            TextColor3 = theme.SubText,
-            TextSize = 13,
-            Font = Enum.Font.GothamMedium,
-            TextXAlignment = Enum.TextXAlignment.Left,
-            Parent = TabBar
-        })
-        create("UICorner", { CornerRadius = UDim.new(0, 6), Parent = TabBtn })
+        -- 1. Collapsible Section Component
+        function Builder:CreateSection(sectionTitle)
+            local isOpen = true
 
-        -- Content Frame for this Tab
-        local TabContent = create("ScrollingFrame", {
-            Name = "Content_" .. tabName,
-            Size = UDim2.new(1, -185, 1, -58),
-            Position = UDim2.new(0, 177, 0, 53),
-            BackgroundTransparency = 1,
-            BorderSizePixel = 0,
-            ScrollBarThickness = 4,
-            Visible = false,
-            AutomaticCanvasSize = Enum.AutomaticSize.Y,
-            CanvasSize = UDim2.new(0, 0, 0, 0),
-            Parent = ContentFolder
-        })
-        create("UIListLayout", {
-            SortOrder = Enum.SortOrder.LayoutOrder,
-            Padding = UDim.new(0, 8),
-            Parent = TabContent
-        })
-        create("UIPadding", {
-            PaddingTop = UDim.new(0, 4),
-            PaddingBottom = UDim.new(0, 15),
-            PaddingLeft = UDim.new(0, 4),
-            PaddingRight = UDim.new(0, 8),
-            Parent = TabContent
-        })
+            local SectionFrame = create("Frame", {
+                Name = "Section_" .. tostring(sectionTitle),
+                Size = UDim2.new(1, 0, 0, 36),
+                BackgroundColor3 = InterfaceObj.Theme.HeaderBg,
+                BackgroundTransparency = math.clamp(glassTransparency - 0.05, 0, 1),
+                BorderSizePixel = 0,
+                ClipsDescendants = true,
+                Parent = targetContainer
+            })
+            create("UICorner", { CornerRadius = UDim.new(0, 6), Parent = SectionFrame })
+            local SecStroke = create("UIStroke", { Color = InterfaceObj.Theme.Border, Thickness = 1, Parent = SectionFrame })
 
-        local TabObj = {
-            TabBtn = TabBtn,
-            TabContent = TabContent,
-            Name = tabName
-        }
+            local HeaderBtn = create("TextButton", {
+                Size = UDim2.new(1, 0, 0, 36),
+                BackgroundTransparency = 1,
+                Text = "",
+                Parent = SectionFrame
+            })
 
-        local function activateTab()
-            for _, t in ipairs(InterfaceObj.Tabs) do
-                t.TabContent.Visible = false
-                t.TabBtn.BackgroundColor3 = InterfaceObj.Theme.CardBg
-                t.TabBtn.TextColor3 = InterfaceObj.Theme.SubText
+            local TitleLabel = create("TextLabel", {
+                Size = UDim2.new(1, -40, 1, 0),
+                Position = UDim2.new(0, 12, 0, 0),
+                BackgroundTransparency = 1,
+                Text = sectionTitle or "Section",
+                TextColor3 = InterfaceObj.Theme.TextColor,
+                TextSize = 13,
+                Font = Enum.Font.GothamBold,
+                TextXAlignment = Enum.TextXAlignment.Left,
+                Parent = HeaderBtn
+            })
+
+            local Arrow = create("TextLabel", {
+                Size = UDim2.new(0, 20, 0, 20),
+                Position = UDim2.new(1, -28, 0.5, -10),
+                BackgroundTransparency = 1,
+                Text = "▼",
+                TextColor3 = InterfaceObj.Theme.SubText,
+                TextSize = 11,
+                Font = Enum.Font.GothamBold,
+                Parent = HeaderBtn
+            })
+
+            local ItemsContainer = create("Frame", {
+                Name = "ItemsContainer",
+                Size = UDim2.new(1, 0, 0, 0),
+                Position = UDim2.new(0, 0, 0, 36),
+                BackgroundTransparency = 1,
+                ClipsDescendants = false,
+                Parent = SectionFrame
+            })
+
+            local SectionLayout = create("UIListLayout", {
+                SortOrder = Enum.SortOrder.LayoutOrder,
+                Padding = UDim.new(0, 6),
+                HorizontalAlignment = Enum.HorizontalAlignment.Center,
+                Parent = ItemsContainer
+            })
+            create("UIPadding", {
+                PaddingTop = UDim.new(0, 4),
+                PaddingBottom = UDim.new(0, 6),
+                PaddingLeft = UDim.new(0, 6),
+                PaddingRight = UDim.new(0, 6),
+                Parent = ItemsContainer
+            })
+
+            local SectionObject = {}
+
+            local function updateSectionHeight()
+                local contentHeight = SectionLayout.AbsoluteContentSize.Y
+                ItemsContainer.Size = UDim2.new(1, 0, 0, contentHeight + 10)
+                if isOpen then
+                    ItemsContainer.Visible = true
+                    local targetHeight = 36 + contentHeight + 10
+                    TweenService:Create(SectionFrame, TweenInfo.new(0.25, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
+                        Size = UDim2.new(1, 0, 0, targetHeight)
+                    }):Play()
+                    TweenService:Create(Arrow, TweenInfo.new(0.25), { Rotation = 0 }):Play()
+                else
+                    TweenService:Create(SectionFrame, TweenInfo.new(0.25, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
+                        Size = UDim2.new(1, 0, 0, 36)
+                    }):Play()
+                    TweenService:Create(Arrow, TweenInfo.new(0.25), { Rotation = -90 }):Play()
+                    task.delay(0.25, function()
+                        if not isOpen then
+                            ItemsContainer.Visible = false
+                        end
+                    end)
+                end
+                if parentSection and parentSection.UpdateHeight then
+                    parentSection.UpdateHeight()
+                end
             end
-            TabContent.Visible = true
-            TabBtn.BackgroundColor3 = InterfaceObj.Theme.Accent
-            TabBtn.TextColor3 = InterfaceObj.Theme.AccentText
-            InterfaceObj.ActiveTab = TabObj
-        end
-        TabObj.Activate = activateTab
 
-        TabBtn.MouseButton1Click:Connect(activateTab)
+            SectionObject.UpdateHeight = updateSectionHeight
 
-        table.insert(themeUpdaters, function(t)
-            if InterfaceObj.ActiveTab == TabObj then
-                TabBtn.BackgroundColor3 = t.Accent
-                TabBtn.TextColor3 = t.AccentText
-            else
-                TabBtn.BackgroundColor3 = t.CardBg
-                TabBtn.TextColor3 = t.SubText
+            SectionLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+                if isOpen then updateSectionHeight() end
+            end)
+
+            HeaderBtn.MouseButton1Click:Connect(function()
+                isOpen = not isOpen
+                if isOpen then ItemsContainer.Visible = true end
+                updateSectionHeight()
+            end)
+
+            table.insert(themeUpdaters, function(t)
+                SectionFrame.BackgroundColor3 = t.HeaderBg
+                SecStroke.Color = t.Border
+                TitleLabel.TextColor3 = t.TextColor
+                Arrow.TextColor3 = t.SubText
+            end)
+
+            -- The Section returns its own Builder targeting its ItemsContainer
+            local childBuilder = createElementBuilder(ItemsContainer, tabName, SectionObject)
+            for k, v in pairs(childBuilder) do
+                SectionObject[k] = v
             end
-        end)
 
-        table.insert(InterfaceObj.Tabs, TabObj)
-
-        if isDefault or #InterfaceObj.Tabs == 1 then
-            activateTab()
+            updateSectionHeight()
+            return SectionObject
         end
 
-        -- -------------------------------------------------------------
-        -- ELEMENT BUILDERS WITH JSON AUTO-SAVE & RESTORE
-        -- -------------------------------------------------------------
-
-        -- 1. Animated Pill Switch Toggle (JSON Auto-Saved)
-        function TabObj:CreateToggleSwitch(labelTitle, defaultState, callback)
+        -- 2. Animated Pill Toggle Switch
+        function Builder:CreateToggleSwitch(labelTitle, defaultState, callback)
             local configKey = tabName .. "_" .. labelTitle
-            local savedVal = InterfaceObj.ConfigState[configKey]
+            local savedVal = ConfigState[configKey]
             local state = (savedVal ~= nil) and savedVal or (defaultState or false)
-
-            InterfaceObj.ConfigState[configKey] = state
+            ConfigState[configKey] = state
 
             local Card = create("Frame", {
+                Name = "Card_Toggle_" .. labelTitle,
                 Size = UDim2.new(1, 0, 0, 38),
                 BackgroundColor3 = InterfaceObj.Theme.CardBg,
                 BackgroundTransparency = math.clamp(glassTransparency - 0.1, 0, 1),
                 BorderSizePixel = 0,
-                Parent = TabContent
+                Parent = targetContainer
             })
             create("UICorner", { CornerRadius = UDim.new(0, 6), Parent = Card })
 
@@ -700,46 +666,42 @@ function Library:CreateInterface(titleText, descText, discordLink, position, the
                 Parent = Card
             })
 
-            -- Pill Track
             local PillTrack = create("TextButton", {
                 Size = UDim2.new(0, 42, 0, 22),
-                Position = UDim2.new(1, -50, 0.5, -11),
+                Position = UDim2.new(1, -52, 0.5, -11),
                 BackgroundColor3 = state and InterfaceObj.Theme.Accent or InterfaceObj.Theme.MainBg,
                 Text = "",
                 Parent = Card
             })
             create("UICorner", { CornerRadius = UDim.new(1, 0), Parent = PillTrack })
 
-            -- Sliding Pill Knob
-            local Knob = create("Frame", {
+            local PillKnob = create("Frame", {
                 Size = UDim2.new(0, 16, 0, 16),
                 Position = state and UDim2.new(1, -19, 0.5, -8) or UDim2.new(0, 3, 0.5, -8),
                 BackgroundColor3 = Color3.fromRGB(255, 255, 255),
                 Parent = PillTrack
             })
-            create("UICorner", { CornerRadius = UDim.new(1, 0), Parent = Knob })
+            create("UICorner", { CornerRadius = UDim.new(1, 0), Parent = PillKnob })
 
-            local function toggleState(isManual)
-                if isManual then state = not state end
+            local function updateVisuals()
+                if state then
+                    TweenService:Create(PillTrack, TweenInfo.new(0.2), { BackgroundColor3 = InterfaceObj.Theme.Accent }):Play()
+                    TweenService:Create(PillKnob, TweenInfo.new(0.2), { Position = UDim2.new(1, -19, 0.5, -8) }):Play()
+                else
+                    TweenService:Create(PillTrack, TweenInfo.new(0.2), { BackgroundColor3 = InterfaceObj.Theme.MainBg }):Play()
+                    TweenService:Create(PillKnob, TweenInfo.new(0.2), { Position = UDim2.new(0, 3, 0.5, -8) }):Play()
+                end
+            end
 
-                local targetPos = state and UDim2.new(1, -19, 0.5, -8) or UDim2.new(0, 3, 0.5, -8)
-                local targetBg = state and InterfaceObj.Theme.Accent or InterfaceObj.Theme.MainBg
-
-                TweenService:Create(Knob, TweenInfo.new(0.2, Enum.EasingStyle.Quart), { Position = targetPos }):Play()
-                TweenService:Create(PillTrack, TweenInfo.new(0.2, Enum.EasingStyle.Quart), { BackgroundColor3 = targetBg }):Play()
-
-                InterfaceObj.ConfigState[configKey] = state
+            local function toggle()
+                state = not state
+                ConfigState[configKey] = state
                 autoSaveConfig()
-
+                updateVisuals()
                 if callback then pcall(callback, state) end
             end
 
-            PillTrack.MouseButton1Click:Connect(function() toggleState(true) end)
-            Label.InputBegan:Connect(function(input)
-                if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-                    toggleState(true)
-                end
-            end)
+            PillTrack.MouseButton1Click:Connect(toggle)
 
             table.insert(themeUpdaters, function(t)
                 Card.BackgroundColor3 = t.CardBg
@@ -747,7 +709,6 @@ function Library:CreateInterface(titleText, descText, discordLink, position, the
                 PillTrack.BackgroundColor3 = state and t.Accent or t.MainBg
             end)
 
-            -- Invoke callback if restored from JSON on startup
             if savedVal ~= nil and callback then
                 pcall(callback, state)
             end
@@ -755,356 +716,23 @@ function Library:CreateInterface(titleText, descText, discordLink, position, the
             return Card
         end
 
-        -- Checkbox
-        function TabObj:CreateCheckbox(labelTitle, callback)
-            return TabObj:CreateToggleSwitch(labelTitle, false, callback)
+        function Builder:CreateCheckbox(labelTitle, callback)
+            return Builder:CreateToggleSwitch(labelTitle, false, callback)
         end
 
-        -- 2. Slider Component (JSON Auto-Saved)
-        function TabObj:CreateSlider(labelTitle, minValArg, maxValArg, defaultValArg, callbackArg)
-            local minVal, maxVal, defaultVal, callback
-
-            if type(callbackArg) == "function" then
-                minVal = minValArg or 0
-                maxVal = maxValArg or 500
-                defaultVal = defaultValArg or minVal
-                callback = callbackArg
-            elseif type(defaultValArg) == "function" then
-                maxVal = minValArg or 500
-                minVal = 0
-                defaultVal = maxValArg or 0
-                callback = defaultValArg
-            else
-                minVal = minValArg or 0
-                maxVal = maxValArg or 500
-                defaultVal = defaultValArg or minVal
-                callback = callbackArg
-            end
-
-            local configKey = tabName .. "_" .. labelTitle
-            local savedVal = InterfaceObj.ConfigState[configKey]
-            local currentVal = (savedVal ~= nil) and tonumber(savedVal) or defaultVal
-
-            InterfaceObj.ConfigState[configKey] = currentVal
-
-            local Card = create("Frame", {
-                Size = UDim2.new(1, 0, 0, 52),
-                BackgroundColor3 = InterfaceObj.Theme.CardBg,
-                BackgroundTransparency = math.clamp(glassTransparency - 0.1, 0, 1),
-                BorderSizePixel = 0,
-                Parent = TabContent
-            })
-            create("UICorner", { CornerRadius = UDim.new(0, 6), Parent = Card })
-
-            local Label = create("TextLabel", {
-                Size = UDim2.new(0.7, 0, 0, 22),
-                Position = UDim2.new(0, 12, 0, 4),
-                BackgroundTransparency = 1,
-                Text = labelTitle,
-                TextColor3 = InterfaceObj.Theme.TextColor,
-                TextSize = 13,
-                Font = Enum.Font.Gotham,
-                TextXAlignment = Enum.TextXAlignment.Left,
-                Parent = Card
-            })
-
-            local ValueLabel = create("TextLabel", {
-                Size = UDim2.new(0.25, 0, 0, 22),
-                Position = UDim2.new(0.72, 0, 0, 4),
-                BackgroundTransparency = 1,
-                Text = tostring(currentVal),
-                TextColor3 = InterfaceObj.Theme.SubText,
-                TextSize = 13,
-                Font = Enum.Font.GothamBold,
-                TextXAlignment = Enum.TextXAlignment.Right,
-                Parent = Card
-            })
-
-            local SliderTrack = create("TextButton", {
-                Size = UDim2.new(1, -24, 0, 8),
-                Position = UDim2.new(0, 12, 0, 32),
-                BackgroundColor3 = InterfaceObj.Theme.MainBg,
-                Text = "",
-                Parent = Card
-            })
-            create("UICorner", { CornerRadius = UDim.new(0, 4), Parent = SliderTrack })
-
-            local fillPercent = math.clamp((currentVal - minVal) / math.max(maxVal - minVal, 1), 0, 1)
-            local SliderFill = create("Frame", {
-                Size = UDim2.new(fillPercent, 0, 1, 0),
-                BackgroundColor3 = InterfaceObj.Theme.Accent,
-                BorderSizePixel = 0,
-                Parent = SliderTrack
-            })
-            create("UICorner", { CornerRadius = UDim.new(0, 4), Parent = SliderFill })
-
-            table.insert(themeUpdaters, function(t)
-                Card.BackgroundColor3 = t.CardBg
-                Label.TextColor3 = t.TextColor
-                ValueLabel.TextColor3 = t.SubText
-                SliderTrack.BackgroundColor3 = t.MainBg
-                SliderFill.BackgroundColor3 = t.Accent
-            end)
-
-            local dragging = false
-
-            local function updateSlider(input)
-                local pos = math.clamp((input.Position.X - SliderTrack.AbsolutePosition.X) / SliderTrack.AbsoluteSize.X, 0, 1)
-                local val = math.floor(minVal + (maxVal - minVal) * pos)
-                currentVal = val
-                SliderFill.Size = UDim2.new(pos, 0, 1, 0)
-                ValueLabel.Text = tostring(val)
-                InterfaceObj.ConfigState[configKey] = val
-                autoSaveConfig()
-                if callback then pcall(callback, val) end
-            end
-
-            SliderTrack.InputBegan:Connect(function(input)
-                if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-                    dragging = true
-                    updateSlider(input)
-                end
-            end)
-
-            UserInputService.InputChanged:Connect(function(input)
-                if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
-                    updateSlider(input)
-                end
-            end)
-
-            UserInputService.InputEnded:Connect(function(input)
-                if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-                    dragging = false
-                end
-            end)
-
-            -- Invoke callback if restored from JSON on startup
-            if savedVal ~= nil and callback then
-                pcall(callback, currentVal)
-            end
-
-            return Card
-        end
-
-        -- 3. Textbox / Input Component (JSON Auto-Saved)
-        function TabObj:CreateTextbox(labelTitle, placeholderText, defaultVal, callback)
-            local configKey = tabName .. "_" .. labelTitle
-            local savedVal = InterfaceObj.ConfigState[configKey]
-            local textVal = (savedVal ~= nil) and tostring(savedVal) or (defaultVal or "")
-
-            InterfaceObj.ConfigState[configKey] = textVal
-
-            local Card = create("Frame", {
-                Size = UDim2.new(1, 0, 0, 42),
-                BackgroundColor3 = InterfaceObj.Theme.CardBg,
-                BackgroundTransparency = math.clamp(glassTransparency - 0.1, 0, 1),
-                BorderSizePixel = 0,
-                Parent = TabContent
-            })
-            create("UICorner", { CornerRadius = UDim.new(0, 6), Parent = Card })
-
-            local Label = create("TextLabel", {
-                Size = UDim2.new(0.5, -12, 1, 0),
-                Position = UDim2.new(0, 12, 0, 0),
-                BackgroundTransparency = 1,
-                Text = labelTitle,
-                TextColor3 = InterfaceObj.Theme.TextColor,
-                TextSize = 13,
-                Font = Enum.Font.Gotham,
-                TextXAlignment = Enum.TextXAlignment.Left,
-                Parent = Card
-            })
-
-            local InputBox = create("TextBox", {
-                Size = UDim2.new(0.5, -12, 0, 28),
-                Position = UDim2.new(0.5, 0, 0.5, -14),
-                BackgroundColor3 = InterfaceObj.Theme.MainBg,
-                Text = textVal,
-                PlaceholderText = placeholderText or "Enter value...",
-                PlaceholderColor3 = InterfaceObj.Theme.SubText,
-                TextColor3 = InterfaceObj.Theme.TextColor,
-                TextSize = 12,
-                Font = Enum.Font.Gotham,
-                ClearTextOnFocus = false,
-                Parent = Card
-            })
-            create("UICorner", { CornerRadius = UDim.new(0, 5), Parent = InputBox })
-
-            InputBox.FocusLost:Connect(function(enterPressed)
-                InterfaceObj.ConfigState[configKey] = InputBox.Text
-                autoSaveConfig()
-                if callback then pcall(callback, InputBox.Text, enterPressed) end
-            end)
-
-            table.insert(themeUpdaters, function(t)
-                Card.BackgroundColor3 = t.CardBg
-                Label.TextColor3 = t.TextColor
-                InputBox.BackgroundColor3 = t.MainBg
-                InputBox.PlaceholderColor3 = t.SubText
-                InputBox.TextColor3 = t.TextColor
-            end)
-
-            if savedVal ~= nil and callback then
-                pcall(callback, textVal, false)
-            end
-
-            return Card
-        end
-
-        -- 4. Keybind Picker Component (JSON Auto-Saved)
-        function TabObj:CreateKeybind(labelTitle, defaultKey, callback)
-            local configKey = tabName .. "_" .. labelTitle
-            local savedVal = InterfaceObj.ConfigState[configKey]
-            local currentKeyName = (savedVal ~= nil) and tostring(savedVal) or (defaultKey and defaultKey.Name or "K")
-            local currentKey = Enum.KeyCode[currentKeyName] or defaultKey or Enum.KeyCode.K
-
-            InterfaceObj.ConfigState[configKey] = currentKey.Name
-
-            local listening = false
-
-            local Card = create("Frame", {
-                Size = UDim2.new(1, 0, 0, 38),
-                BackgroundColor3 = InterfaceObj.Theme.CardBg,
-                BackgroundTransparency = math.clamp(glassTransparency - 0.1, 0, 1),
-                BorderSizePixel = 0,
-                Parent = TabContent
-            })
-            create("UICorner", { CornerRadius = UDim.new(0, 6), Parent = Card })
-
-            local Label = create("TextLabel", {
-                Size = UDim2.new(1, -110, 1, 0),
-                Position = UDim2.new(0, 12, 0, 0),
-                BackgroundTransparency = 1,
-                Text = labelTitle,
-                TextColor3 = InterfaceObj.Theme.TextColor,
-                TextSize = 13,
-                Font = Enum.Font.Gotham,
-                TextXAlignment = Enum.TextXAlignment.Left,
-                Parent = Card
-            })
-
-            local KeyBtn = create("TextButton", {
-                Size = UDim2.new(0, 85, 0, 24),
-                Position = UDim2.new(1, -95, 0.5, -12),
-                BackgroundColor3 = InterfaceObj.Theme.MainBg,
-                Text = currentKey.Name,
-                TextColor3 = InterfaceObj.Theme.Accent,
-                TextSize = 12,
-                Font = Enum.Font.GothamBold,
-                Parent = Card
-            })
-            create("UICorner", { CornerRadius = UDim.new(0, 5), Parent = KeyBtn })
-
-            KeyBtn.MouseButton1Click:Connect(function()
-                listening = true
-                KeyBtn.Text = "Press Key..."
-            end)
-
-            UserInputService.InputBegan:Connect(function(input, gpe)
-                if listening and not gpe and input.UserInputType == Enum.UserInputType.Keyboard then
-                    listening = false
-                    currentKey = input.KeyCode
-                    KeyBtn.Text = currentKey.Name
-                    InterfaceObj.ConfigState[configKey] = currentKey.Name
-                    autoSaveConfig()
-                    if callback then pcall(callback, currentKey) end
-                end
-            end)
-
-            table.insert(themeUpdaters, function(t)
-                Card.BackgroundColor3 = t.CardBg
-                Label.TextColor3 = t.TextColor
-                KeyBtn.BackgroundColor3 = t.MainBg
-                KeyBtn.TextColor3 = t.Accent
-            end)
-
-            if savedVal ~= nil and callback then
-                pcall(callback, currentKey)
-            end
-
-            return Card
-        end
-
-        -- 5. Button Component
-        function TabObj:CreateButton(btnText, callback)
-            local Card = create("TextButton", {
-                Size = UDim2.new(1, 0, 0, 36),
-                BackgroundColor3 = InterfaceObj.Theme.Accent,
-                BackgroundTransparency = math.clamp(glassTransparency - 0.1, 0, 1),
-                Text = btnText,
-                TextColor3 = InterfaceObj.Theme.AccentText,
-                TextSize = 13,
-                Font = Enum.Font.GothamMedium,
-                Parent = TabContent
-            })
-            create("UICorner", { CornerRadius = UDim.new(0, 6), Parent = Card })
-
-            Card.MouseButton1Click:Connect(function()
-                if callback then pcall(callback) end
-            end)
-
-            table.insert(themeUpdaters, function(t)
-                Card.BackgroundColor3 = t.Accent
-                Card.TextColor3 = t.AccentText
-            end)
-
-            return Card
-        end
-
-        -- Comment / Header Divider
-        function TabObj:CreateComment(text)
-            local Card = create("Frame", {
-                Size = UDim2.new(1, 0, 0, 28),
-                BackgroundColor3 = InterfaceObj.Theme.HeaderBg,
-                BackgroundTransparency = math.clamp(glassTransparency - 0.1, 0, 1),
-                BorderSizePixel = 0,
-                Parent = TabContent
-            })
-            create("UICorner", { CornerRadius = UDim.new(0, 6), Parent = Card })
-
-            local commentcontent = create("TextLabel", {
-                Name = "commentcontent",
-                Size = UDim2.new(1, -20, 1, 0),
-                Position = UDim2.new(0, 10, 0, 0),
-                BackgroundTransparency = 1,
-                Text = text or "",
-                TextColor3 = InterfaceObj.Theme.SubText,
-                TextSize = 12,
-                Font = Enum.Font.GothamBold,
-                TextXAlignment = Enum.TextXAlignment.Left,
-                Parent = Card
-            })
-
-            table.insert(themeUpdaters, function(t)
-                Card.BackgroundColor3 = t.HeaderBg
-                commentcontent.TextColor3 = t.SubText
-            end)
-
-            local CommentObj = {
-                Card = Card,
-                commentcontent = commentcontent
-            }
-
-            function CommentObj:SetText(newText)
-                commentcontent.Text = newText
-            end
-
-            return CommentObj
-        end
-
-        -- 6. Searchable Dropdown (JSON Auto-Saved)
-        function TabObj:CreateDropDown(dropTitle, callback)
+        -- 3. Searchable Dropdown with Highlighting Checkboxes
+        function Builder:CreateDropDown(dropTitle, callback)
             local isOpen = false
-
             local configKey = tabName .. "_" .. dropTitle
 
             local DropCard = create("Frame", {
+                Name = "DropCard_" .. dropTitle,
                 Size = UDim2.new(1, 0, 0, 36),
                 BackgroundColor3 = InterfaceObj.Theme.CardBg,
                 BackgroundTransparency = math.clamp(glassTransparency - 0.1, 0, 1),
                 BorderSizePixel = 0,
                 ClipsDescendants = true,
-                Parent = TabContent
+                Parent = targetContainer
             })
             create("UICorner", { CornerRadius = UDim.new(0, 6), Parent = DropCard })
 
@@ -1138,7 +766,7 @@ function Library:CreateInterface(titleText, descText, discordLink, position, the
                 Parent = HeaderBtn
             })
 
-            -- Search Bar inside Dropdown
+            -- Search Box
             local SearchFrame = create("Frame", {
                 Size = UDim2.new(1, -16, 0, 28),
                 Position = UDim2.new(0, 8, 0, 40),
@@ -1152,7 +780,7 @@ function Library:CreateInterface(titleText, descText, discordLink, position, the
                 Size = UDim2.new(1, -16, 1, 0),
                 Position = UDim2.new(0, 8, 0, 0),
                 BackgroundTransparency = 1,
-                PlaceholderText = "🔍 Search options...",
+                PlaceholderText = "Search...",
                 PlaceholderColor3 = InterfaceObj.Theme.SubText,
                 Text = "",
                 TextColor3 = InterfaceObj.Theme.TextColor,
@@ -1163,86 +791,86 @@ function Library:CreateInterface(titleText, descText, discordLink, position, the
                 Parent = SearchFrame
             })
 
-            local ItemsContainer = create("Frame", {
+            local ItemsHolder = create("ScrollingFrame", {
                 Size = UDim2.new(1, -16, 0, 0),
-                Position = UDim2.new(0, 8, 0, 74),
+                Position = UDim2.new(0, 8, 0, 72),
                 BackgroundTransparency = 1,
+                ScrollBarThickness = 3,
+                CanvasSize = UDim2.new(0, 0, 0, 0),
+                AutomaticCanvasSize = Enum.AutomaticSize.Y,
                 Parent = DropCard
             })
+
             local ItemLayout = create("UIListLayout", {
                 SortOrder = Enum.SortOrder.LayoutOrder,
                 Padding = UDim.new(0, 4),
-                Parent = ItemsContainer
+                Parent = ItemsHolder
             })
 
-            table.insert(themeUpdaters, function(t)
-                DropCard.BackgroundColor3 = t.CardBg
-                TitleLabel.TextColor3 = t.TextColor
-                Arrow.TextColor3 = t.SubText
-                SearchFrame.BackgroundColor3 = t.MainBg
-                SearchBox.PlaceholderColor3 = t.SubText
-                SearchBox.TextColor3 = t.TextColor
-            end)
+            local allItemFrames = {}
 
             local function updateDropSize()
                 if isOpen then
-                    local totalH = 78 + ItemLayout.AbsoluteContentSize.Y
-                    DropCard.Size = UDim2.new(1, 0, 0, totalH)
-                    Arrow.Text = "▲"
+                    local contentHeight = ItemLayout.AbsoluteContentSize.Y
+                    local maxScrollHeight = math.clamp(contentHeight, 30, 160)
+                    ItemsHolder.Size = UDim2.new(1, -16, 0, maxScrollHeight)
+                    local totalHeight = 76 + maxScrollHeight
+                    TweenService:Create(DropCard, TweenInfo.new(0.25, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
+                        Size = UDim2.new(1, 0, 0, totalHeight)
+                    }):Play()
+                    TweenService:Create(Arrow, TweenInfo.new(0.25), { Rotation = 180 }):Play()
                 else
-                    DropCard.Size = UDim2.new(1, 0, 0, 36)
-                    Arrow.Text = "▼"
+                    TweenService:Create(DropCard, TweenInfo.new(0.25, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
+                        Size = UDim2.new(1, 0, 0, 36)
+                    }):Play()
+                    TweenService:Create(Arrow, TweenInfo.new(0.25), { Rotation = 0 }):Play()
+                end
+                if parentSection and parentSection.UpdateHeight then
+                    parentSection.UpdateHeight()
                 end
             end
-
-            local function filterItems()
-                local query = SearchBox.Text:lower()
-                for _, child in ipairs(ItemsContainer:GetChildren()) do
-                    if not child:IsA("UIListLayout") and not child:IsA("UIPadding") then
-                        local itemText = ""
-                        if child:IsA("TextButton") then
-                            itemText = child.Text
-                        else
-                            local label = child:FindFirstChildWhichIsA("TextLabel")
-                            if label then itemText = label.Text end
-                        end
-                        if query == "" or itemText:lower():find(query, 1, true) then
-                            child.Visible = true
-                        else
-                            child.Visible = false
-                        end
-                    end
-                end
-                if isOpen then updateDropSize() end
-            end
-
-            SearchBox:GetPropertyChangedSignal("Text"):Connect(filterItems)
-            ItemLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
-                if isOpen then updateDropSize() end
-            end)
 
             HeaderBtn.MouseButton1Click:Connect(function()
                 isOpen = not isOpen
                 updateDropSize()
             end)
 
+            SearchBox:GetPropertyChangedSignal("Text"):Connect(function()
+                local q = string.lower(SearchBox.Text)
+                for _, itemData in ipairs(allItemFrames) do
+                    if q == "" or string.find(string.lower(itemData.Text), q, 1, true) then
+                        itemData.Frame.Visible = true
+                    else
+                        itemData.Frame.Visible = false
+                    end
+                end
+                updateDropSize()
+            end)
+
+            table.insert(themeUpdaters, function(t)
+                DropCard.BackgroundColor3 = t.CardBg
+                TitleLabel.TextColor3 = t.TextColor
+                Arrow.TextColor3 = t.SubText
+                SearchFrame.BackgroundColor3 = t.MainBg
+                SearchBox.TextColor3 = t.TextColor
+                SearchBox.PlaceholderColor3 = t.SubText
+            end)
+
             local DropdownObj = {
-                Card = DropCard,
-                ItemsContainer = ItemsContainer,
-                SearchBox = SearchBox
+                Card = DropCard
             }
 
             function DropdownObj:AddButton(btnText, btnCallback)
                 local Btn = create("TextButton", {
-                    Size = UDim2.new(1, 0, 0, 28),
+                    Size = UDim2.new(1, 0, 0, 26),
                     BackgroundColor3 = InterfaceObj.Theme.MainBg,
                     Text = btnText,
                     TextColor3 = InterfaceObj.Theme.TextColor,
                     TextSize = 12,
                     Font = Enum.Font.Gotham,
-                    Parent = ItemsContainer
+                    Parent = ItemsHolder
                 })
-                create("UICorner", { CornerRadius = UDim.new(0, 5), Parent = Btn })
+                create("UICorner", { CornerRadius = UDim.new(0, 4), Parent = Btn })
 
                 table.insert(themeUpdaters, function(t)
                     Btn.BackgroundColor3 = t.MainBg
@@ -1250,78 +878,67 @@ function Library:CreateInterface(titleText, descText, discordLink, position, the
                 end)
 
                 Btn.MouseButton1Click:Connect(function()
-                    InterfaceObj.ConfigState[configKey] = btnText
+                    ConfigState[configKey] = btnText
                     autoSaveConfig()
                     if btnCallback then pcall(btnCallback) end
                 end)
 
-                -- Check if restored from JSON on startup
-                if InterfaceObj.ConfigState[configKey] == btnText and btnCallback then
-                    pcall(btnCallback)
-                end
-
+                table.insert(allItemFrames, { Frame = Btn, Text = btnText })
+                updateDropSize()
                 return Btn
             end
 
             function DropdownObj:AddCheckbox(chkText, chkCallback)
-                local chkKey = configKey .. "_" .. chkText
-                local savedChk = InterfaceObj.ConfigState[chkKey]
+                local chkConfigKey = configKey .. "_" .. chkText
+                local savedChk = ConfigState[chkConfigKey]
                 local chkState = (savedChk ~= nil) and savedChk or false
+                ConfigState[chkConfigKey] = chkState
 
-                InterfaceObj.ConfigState[chkKey] = chkState
-
-                local ChkFrame = create("TextButton", {
-                    Size = UDim2.new(1, 0, 0, 28),
+                local ChkBtn = create("TextButton", {
+                    Size = UDim2.new(1, 0, 0, 26),
                     BackgroundColor3 = InterfaceObj.Theme.MainBg,
-                    Text = "",
-                    AutoButtonColor = false,
-                    Parent = ItemsContainer
-                })
-                create("UICorner", { CornerRadius = UDim.new(0, 5), Parent = ChkFrame })
-                
-                local Stroke = create("UIStroke", {
-                    Color = InterfaceObj.Theme.Accent,
-                    Thickness = 1,
-                    Transparency = chkState and 0 or 1,
-                    ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
-                    Parent = ChkFrame
-                })
-
-                local ChkLabel = create("TextLabel", {
-                    Size = UDim2.new(1, -20, 1, 0),
-                    Position = UDim2.new(0, 10, 0, 0),
-                    BackgroundTransparency = 1,
-                    Text = chkText,
+                    Text = "  " .. chkText,
                     TextColor3 = chkState and InterfaceObj.Theme.Accent or InterfaceObj.Theme.TextColor,
                     TextSize = 12,
-                    Font = Enum.Font.Gotham,
+                    Font = chkState and Enum.Font.GothamBold or Enum.Font.Gotham,
                     TextXAlignment = Enum.TextXAlignment.Left,
-                    Parent = ChkFrame
+                    Parent = ItemsHolder
+                })
+                create("UICorner", { CornerRadius = UDim.new(0, 4), Parent = ChkBtn })
+                local Stroke = create("UIStroke", {
+                    Color = InterfaceObj.Theme.Accent,
+                    Thickness = 1.2,
+                    Transparency = chkState and 0 or 1,
+                    Parent = ChkBtn
                 })
 
                 local function toggleChk()
                     chkState = not chkState
-                    Stroke.Transparency = chkState and 0 or 1
-                    ChkLabel.TextColor3 = chkState and InterfaceObj.Theme.Accent or InterfaceObj.Theme.TextColor
-                    InterfaceObj.ConfigState[chkKey] = chkState
+                    ConfigState[chkConfigKey] = chkState
                     autoSaveConfig()
+                    Stroke.Transparency = chkState and 0 or 1
+                    ChkBtn.TextColor3 = chkState and InterfaceObj.Theme.Accent or InterfaceObj.Theme.TextColor
+                    ChkBtn.Font = chkState and Enum.Font.GothamBold or Enum.Font.Gotham
                     if chkCallback then pcall(chkCallback, chkState) end
                 end
 
-                ChkFrame.MouseButton1Click:Connect(toggleChk)
+                ChkBtn.MouseButton1Click:Connect(toggleChk)
 
                 table.insert(themeUpdaters, function(t)
-                    ChkFrame.BackgroundColor3 = t.MainBg
+                    ChkBtn.BackgroundColor3 = t.MainBg
                     Stroke.Color = t.Accent
-                    ChkLabel.TextColor3 = chkState and t.Accent or t.TextColor
+                    ChkBtn.TextColor3 = chkState and t.Accent or t.TextColor
                 end)
 
                 if savedChk ~= nil and chkCallback then
                     pcall(chkCallback, chkState)
                 end
 
+                table.insert(allItemFrames, { Frame = ChkBtn, Text = chkText })
+                updateDropSize()
+
                 return {
-                    Frame = ChkFrame,
+                    Frame = ChkBtn,
                     SetValue = function(self, val)
                         if chkState ~= val then
                             toggleChk()
@@ -1333,198 +950,277 @@ function Library:CreateInterface(titleText, descText, discordLink, position, the
             return DropdownObj
         end
 
+        -- 4. Draggable Slider Component
+        function Builder:CreateSlider(labelTitle, minValArg, maxValArg, defaultValArg, callbackArg)
+            local minVal = minValArg or 0
+            local maxVal = maxValArg or 100
+            local defaultVal = defaultValArg or minVal
+            local callback = callbackArg
 
-        function TabObj:CreateSection(sectionTitle)
-            local isOpen = true
-            
-            local SectionFrame = create("Frame", {
-                Name = "Section_" .. tostring(sectionTitle),
+            local configKey = tabName .. "_" .. labelTitle
+            local savedVal = ConfigState[configKey]
+            local currentVal = (savedVal ~= nil) and tonumber(savedVal) or defaultVal
+            ConfigState[configKey] = currentVal
+
+            local Card = create("Frame", {
+                Name = "Card_Slider_" .. labelTitle,
+                Size = UDim2.new(1, 0, 0, 48),
+                BackgroundColor3 = InterfaceObj.Theme.CardBg,
+                BackgroundTransparency = math.clamp(glassTransparency - 0.1, 0, 1),
+                BorderSizePixel = 0,
+                Parent = targetContainer
+            })
+            create("UICorner", { CornerRadius = UDim.new(0, 6), Parent = Card })
+
+            local Label = create("TextLabel", {
+                Size = UDim2.new(0.7, 0, 0, 20),
+                Position = UDim2.new(0, 12, 0, 4),
+                BackgroundTransparency = 1,
+                Text = labelTitle,
+                TextColor3 = InterfaceObj.Theme.TextColor,
+                TextSize = 13,
+                Font = Enum.Font.Gotham,
+                TextXAlignment = Enum.TextXAlignment.Left,
+                Parent = Card
+            })
+
+            local ValueLabel = create("TextLabel", {
+                Size = UDim2.new(0.25, 0, 0, 20),
+                Position = UDim2.new(0.72, 0, 0, 4),
+                BackgroundTransparency = 1,
+                Text = tostring(currentVal),
+                TextColor3 = InterfaceObj.Theme.SubText,
+                TextSize = 12,
+                Font = Enum.Font.GothamBold,
+                TextXAlignment = Enum.TextXAlignment.Right,
+                Parent = Card
+            })
+
+            local SliderTrack = create("TextButton", {
+                Size = UDim2.new(1, -24, 0, 8),
+                Position = UDim2.new(0, 12, 0, 28),
+                BackgroundColor3 = InterfaceObj.Theme.MainBg,
+                Text = "",
+                Parent = Card
+            })
+            create("UICorner", { CornerRadius = UDim.new(1, 0), Parent = SliderTrack })
+
+            local fillPercent = math.clamp((currentVal - minVal) / math.max(maxVal - minVal, 1), 0, 1)
+            local SliderFill = create("Frame", {
+                Size = UDim2.new(fillPercent, 0, 1, 0),
+                BackgroundColor3 = InterfaceObj.Theme.Accent,
+                BorderSizePixel = 0,
+                Parent = SliderTrack
+            })
+            create("UICorner", { CornerRadius = UDim.new(1, 0), Parent = SliderFill })
+
+            local dragging = false
+            local function updateSlider(input)
+                local pos = math.clamp((input.Position.X - SliderTrack.AbsolutePosition.X) / SliderTrack.AbsoluteSize.X, 0, 1)
+                local val = math.floor(minVal + ((maxVal - minVal) * pos))
+                currentVal = val
+                ValueLabel.Text = tostring(val)
+                SliderFill.Size = UDim2.new(pos, 0, 1, 0)
+                ConfigState[configKey] = val
+                autoSaveConfig()
+                if callback then pcall(callback, val) end
+            end
+
+            SliderTrack.InputBegan:Connect(function(input)
+                if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+                    dragging = true
+                    updateSlider(input)
+                end
+            end)
+            UserInputService.InputEnded:Connect(function(input)
+                if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+                    dragging = false
+                end
+            end)
+            UserInputService.InputChanged:Connect(function(input)
+                if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+                    updateSlider(input)
+                end
+            end)
+
+            table.insert(themeUpdaters, function(t)
+                Card.BackgroundColor3 = t.CardBg
+                Label.TextColor3 = t.TextColor
+                ValueLabel.TextColor3 = t.SubText
+                SliderTrack.BackgroundColor3 = t.MainBg
+                SliderFill.BackgroundColor3 = t.Accent
+            end)
+
+            if savedVal ~= nil and callback then
+                pcall(callback, currentVal)
+            end
+
+            return Card
+        end
+
+        -- 5. Accent Button
+        function Builder:CreateButton(btnText, callback)
+            local Card = create("TextButton", {
+                Name = "Card_Button_" .. btnText,
                 Size = UDim2.new(1, 0, 0, 36),
+                BackgroundColor3 = InterfaceObj.Theme.Accent,
+                BackgroundTransparency = 0.1,
+                Text = btnText,
+                TextColor3 = InterfaceObj.Theme.AccentText,
+                TextSize = 13,
+                Font = Enum.Font.GothamMedium,
+                Parent = targetContainer
+            })
+            create("UICorner", { CornerRadius = UDim.new(0, 6), Parent = Card })
+
+            Card.MouseButton1Click:Connect(function()
+                if callback then pcall(callback) end
+            end)
+
+            table.insert(themeUpdaters, function(t)
+                Card.BackgroundColor3 = t.Accent
+                Card.TextColor3 = t.AccentText
+            end)
+
+            return Card
+        end
+
+        -- 6. Comment Divider
+        function Builder:CreateComment(text)
+            local Card = create("Frame", {
+                Name = "Card_Comment",
+                Size = UDim2.new(1, 0, 0, 26),
                 BackgroundColor3 = InterfaceObj.Theme.HeaderBg,
                 BackgroundTransparency = math.clamp(glassTransparency - 0.1, 0, 1),
                 BorderSizePixel = 0,
-                ClipsDescendants = true,
-                Parent = TabContent
+                Parent = targetContainer
             })
-            create("UICorner", { CornerRadius = UDim.new(0, 6), Parent = SectionFrame })
-            
-            local HeaderBtn = create("TextButton", {
-                Size = UDim2.new(1, 0, 0, 36),
+            create("UICorner", { CornerRadius = UDim.new(0, 6), Parent = Card })
+
+            local commentcontent = create("TextLabel", {
+                Size = UDim2.new(1, -20, 1, 0),
+                Position = UDim2.new(0, 10, 0, 0),
                 BackgroundTransparency = 1,
-                Text = "",
-                Parent = SectionFrame
-            })
-            
-            local TitleLabel = create("TextLabel", {
-                Size = UDim2.new(1, -40, 1, 0),
-                Position = UDim2.new(0, 12, 0, 0),
-                BackgroundTransparency = 1,
-                Text = sectionTitle or "Section",
-                TextColor3 = InterfaceObj.Theme.TextColor,
-                TextSize = 13,
-                Font = Enum.Font.GothamBold,
-                TextXAlignment = Enum.TextXAlignment.Left,
-                Parent = HeaderBtn
-            })
-            
-            local Arrow = create("TextLabel", {
-                Size = UDim2.new(0, 20, 0, 20),
-                Position = UDim2.new(1, -28, 0.5, -10),
-                BackgroundTransparency = 1,
-                Text = "▼",
+                Text = text or "",
                 TextColor3 = InterfaceObj.Theme.SubText,
                 TextSize = 11,
                 Font = Enum.Font.GothamBold,
-                Parent = HeaderBtn
+                TextXAlignment = Enum.TextXAlignment.Left,
+                Parent = Card
             })
-            
-            local ItemsContainer = create("Frame", {
-                Name = "ItemsContainer",
-                Size = UDim2.new(1, 0, 0, 0),
-                Position = UDim2.new(0, 0, 0, 36),
-                BackgroundTransparency = 1,
-                ClipsDescendants = true,
-                Parent = SectionFrame
-            })
-            
-            local UIListLayout = create("UIListLayout", {
-                SortOrder = Enum.SortOrder.LayoutOrder,
-                Padding = UDim.new(0, 6),
-                HorizontalAlignment = Enum.HorizontalAlignment.Center,
-                Parent = ItemsContainer
-            })
-            create("UIPadding", {
-                PaddingTop = UDim.new(0, 6),
-                PaddingBottom = UDim.new(0, 6),
-                PaddingLeft = UDim.new(0, 6),
-                PaddingRight = UDim.new(0, 6),
-                Parent = ItemsContainer
-            })
-            
-            local function updateSize()
-                local contentY = UIListLayout.AbsoluteContentSize.Y
-                ItemsContainer.Size = UDim2.new(1, 0, 0, contentY + 12)
-                if isOpen then
-                    ItemsContainer.Visible = true
-                    local targetHeight = 36 + contentY + 12
-                    TweenService:Create(SectionFrame, TweenInfo.new(0.25, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {Size = UDim2.new(1, 0, 0, targetHeight)}):Play()
-                    TweenService:Create(Arrow, TweenInfo.new(0.25), {Rotation = 0}):Play()
-                else
-                    TweenService:Create(SectionFrame, TweenInfo.new(0.25, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {Size = UDim2.new(1, 0, 0, 36)}):Play()
-                    TweenService:Create(Arrow, TweenInfo.new(0.25), {Rotation = -90}):Play()
-                    task.delay(0.25, function()
-                        if not isOpen then
-                            ItemsContainer.Visible = false
-                        end
-                    end)
-                end
-            end
-            
-            UIListLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
-                if isOpen then updateSize() end
-            end)
-            
-            HeaderBtn.MouseButton1Click:Connect(function()
-                isOpen = not isOpen
-                if isOpen then ItemsContainer.Visible = true end
-                updateSize()
-            end)
-            
+
             table.insert(themeUpdaters, function(t)
-                SectionFrame.BackgroundColor3 = t.HeaderBg
-                TitleLabel.TextColor3 = t.TextColor
-                Arrow.TextColor3 = t.SubText
+                Card.BackgroundColor3 = t.HeaderBg
+                commentcontent.TextColor3 = t.SubText
             end)
-            
-            local SectionObj = {}
-            
-            local function getRootFrame(res)
-                if typeof(res) == "Instance" then
-                    return res
-                elseif type(res) == "table" and res.Card then
-                    return res.Card
+
+            return {
+                Card = Card,
+                SetText = function(self, newText)
+                    commentcontent.Text = newText
                 end
-                return nil
-            end
-            
-            function SectionObj:CreateToggleSwitch(...)
-                local res = TabObj:CreateToggleSwitch(...)
-                local frame = getRootFrame(res)
-                if frame then frame.Parent = ItemsContainer end
-                updateSize()
-                return res
-            end
-            
-            function SectionObj:CreateCheckbox(...)
-                local res = TabObj:CreateCheckbox(...)
-                local frame = getRootFrame(res)
-                if frame then frame.Parent = ItemsContainer end
-                updateSize()
-                return res
-            end
+            }
+        end
 
-            function SectionObj:CreateSlider(...)
-                local res = TabObj:CreateSlider(...)
-                local frame = getRootFrame(res)
-                if frame then frame.Parent = ItemsContainer end
-                updateSize()
-                return res
-            end
+        return Builder
+    end
 
-            function SectionObj:CreateTextbox(...)
-                local res = TabObj:CreateTextbox(...)
-                local frame = getRootFrame(res)
-                if frame then frame.Parent = ItemsContainer end
-                updateSize()
-                return res
-            end
+    -- -------------------------------------------------------------
+    -- CREATE TAB
+    -- -------------------------------------------------------------
+    function InterfaceObj:CreateTab(tabName, tabDesc, icon, isDefault)
+        local TabBtn = create("TextButton", {
+            Name = "TabBtn_" .. tabName,
+            Size = UDim2.new(1, 0, 0, 34),
+            BackgroundColor3 = theme.CardBg,
+            BackgroundTransparency = 0.6,
+            Text = "  " .. tabName,
+            TextColor3 = theme.SubText,
+            TextSize = 13,
+            Font = Enum.Font.GothamMedium,
+            TextXAlignment = Enum.TextXAlignment.Left,
+            Parent = Sidebar
+        })
+        create("UICorner", { CornerRadius = UDim.new(0, 6), Parent = TabBtn })
 
-            function SectionObj:CreateKeybind(...)
-                local res = TabObj:CreateKeybind(...)
-                local frame = getRootFrame(res)
-                if frame then frame.Parent = ItemsContainer end
-                updateSize()
-                return res
-            end
+        -- Tab Content ScrollingFrame
+        local TabContent = create("ScrollingFrame", {
+            Name = "Content_" .. tabName,
+            Size = UDim2.new(1, 0, 1, 0),
+            Position = UDim2.new(0, 0, 0, 0),
+            BackgroundTransparency = 1,
+            BorderSizePixel = 0,
+            ScrollBarThickness = 4,
+            Visible = false,
+            AutomaticCanvasSize = Enum.AutomaticSize.Y,
+            CanvasSize = UDim2.new(0, 0, 0, 0),
+            Parent = ContentContainer
+        })
 
-            function SectionObj:CreateButton(...)
-                local res = TabObj:CreateButton(...)
-                local frame = getRootFrame(res)
-                if frame then frame.Parent = ItemsContainer end
-                updateSize()
-                return res
-            end
+        local ContentLayout = create("UIListLayout", {
+            SortOrder = Enum.SortOrder.LayoutOrder,
+            Padding = UDim.new(0, 6),
+            HorizontalAlignment = Enum.HorizontalAlignment.Center,
+            Parent = TabContent
+        })
+        create("UIPadding", {
+            PaddingTop = UDim.new(0, 4),
+            PaddingBottom = UDim.new(0, 10),
+            PaddingLeft = UDim.new(0, 6),
+            PaddingRight = UDim.new(0, 6),
+            Parent = TabContent
+        })
 
-            function SectionObj:CreateComment(...)
-                local res = TabObj:CreateComment(...)
-                local frame = getRootFrame(res)
-                if frame then frame.Parent = ItemsContainer end
-                updateSize()
-                return res
-            end
+        local TabObj = {
+            TabBtn = TabBtn,
+            TabContent = TabContent
+        }
 
-            function SectionObj:CreateDropDown(...)
-                local res = TabObj:CreateDropDown(...)
-                local frame = getRootFrame(res)
-                if frame then
-                    frame.Parent = ItemsContainer
-                    frame:GetPropertyChangedSignal("Size"):Connect(function()
-                        if isOpen then
-                            updateSize()
-                        end
-                    end)
-                end
-                updateSize()
-                return res
+        local function activateTab()
+            for _, t in ipairs(InterfaceObj.Tabs) do
+                t.TabContent.Visible = false
+                t.TabBtn.TextColor3 = InterfaceObj.Theme.SubText
+                t.TabBtn.BackgroundColor3 = InterfaceObj.Theme.CardBg
+                t.TabBtn.BackgroundTransparency = 0.6
+                t.TabBtn.Font = Enum.Font.GothamMedium
             end
-            
-            updateSize()
-            return SectionObj
+            TabContent.Visible = true
+            TabBtn.TextColor3 = InterfaceObj.Theme.AccentText
+            TabBtn.BackgroundColor3 = InterfaceObj.Theme.Accent
+            TabBtn.BackgroundTransparency = 0.15
+            TabBtn.Font = Enum.Font.GothamBold
+            InterfaceObj.ActiveTab = TabObj
+        end
+
+        TabObj.Activate = activateTab
+        TabBtn.MouseButton1Click:Connect(activateTab)
+
+        table.insert(themeUpdaters, function(t)
+            if InterfaceObj.ActiveTab == TabObj then
+                TabBtn.BackgroundColor3 = t.Accent
+                TabBtn.TextColor3 = t.AccentText
+            else
+                TabBtn.BackgroundColor3 = t.CardBg
+                TabBtn.TextColor3 = t.SubText
+            end
+        end)
+
+        table.insert(InterfaceObj.Tabs, TabObj)
+
+        if #InterfaceObj.Tabs == 1 or isDefault then
+            activateTab()
+        end
+
+        -- Attach the component builder directly to TabContent
+        local builder = createElementBuilder(TabContent, tabName, nil)
+        for k, v in pairs(builder) do
+            TabObj[k] = v
         end
 
         return TabObj
     end
 
+    table.insert(Library.ActiveInterfaces, InterfaceObj)
     return InterfaceObj
 end
 

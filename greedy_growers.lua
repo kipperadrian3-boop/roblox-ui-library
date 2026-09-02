@@ -1,14 +1,17 @@
 --[[
-    Greedy Growers - Auto Seed Buyer (greedy_growers.lua)
-    Universal JSON Engine Auto-Save Enabled
+    Greedy Growers - Automated Farming & Selling Suite (greedy_growers.lua)
+    Engineered with Full JSON State Restoration & Multi-Threaded Automation
 ]]
 
 local Workspace = game:GetService("Workspace")
 local VirtualInputManager = game:GetService("VirtualInputManager")
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local LocalPlayer = Players.LocalPlayer
 
 local REPO_URL = "https://raw.githubusercontent.com/kipperadrian3-boop/roblox-ui-library/main/"
 
--- Load UI Library Framework (lib.lua with dynamic cache buster & JSON auto-save engine)
+-- Load UI Library Framework with Cache Buster
 local success, lib = pcall(function()
     return loadstring(game:HttpGet(REPO_URL .. "lib.lua?v=" .. tostring(math.random(1, 9999999))))()
 end)
@@ -18,116 +21,123 @@ if not success or not lib or type(lib) ~= "table" then
     return
 end
 
--- Create Interface
-local int = lib:CreateInterface("Greedy Growers", "Auto Seed Collection", "", "bottom left", "emerald", 0.25)
+-- Create GUI Interface
+local int = lib:CreateInterface("Greedy Growers", "Automation & Farming Suite", "", "bottom left", "emerald", 0.20)
 
--- Tabs
-local mainTab = int:CreateTab("Main", "Auto Collection", "op", true)
-local autoTab = int:CreateTab("Automation", "Farming & Selling", "op")
+-- Navigation Tabs
+local mainTab = int:CreateTab("Main", "Farming & Collecting", "op", true)
+local autoTab = int:CreateTab("Automation", "Selling & Stand", "op")
 local settingsTab = int:CreateTab("Settings", "UI Customization", "misc")
 
--- Configuration State (JSON Auto-Saved by lib.lua)
+-- Configuration State
 local Config = {
-    AutoBuyEnabled = false
+    AutoBuyEnabled = false,
+    AutoCollectFruits = false,
+    SellAllEnabled = false
 }
 
--- Seed Config
+-- Seed Definitions & Rarities
 local t = {}
 t.Seeds = {
-	Oak = { rarity = "COMMON" },
-	Pine = { rarity = "COMMON" },
-	Apple = { rarity = "RARE" },
-	Peach = { rarity = "RARE" },
-	Fig = { rarity = "RARE" },
-	Orange = { rarity = "EPIC" },
-	Lemon = { rarity = "EPIC" },
-	Avocado = { rarity = "EPIC" },
-	Cherry = { rarity = "LEGENDARY" },
-	Mango = { rarity = "LEGENDARY" },
-	Coconut = { rarity = "LEGENDARY" },
-	Banana = { rarity = "MYTHIC" },
-	Starfruit = { rarity = "MYTHIC" },
-	DragonFruit = { rarity = "MYTHIC" },
-	Glowing = { rarity = "CELESTIAL" },
-	Blooming = { rarity = "CELESTIAL" },
-	Magic = { rarity = "SECRET" },
-	Pizza = { rarity = "SECRET" },
-	Diamond = { rarity = "DIVINE" },
-	Void = { rarity = "DIVINE" },
-	Mushroom = { rarity = "TRANSCENDENT" },
-	Money = { rarity = "TRANSCENDENT" },
-	Glowshroom = { rarity = "ANCIENT" },
-	Elder = { rarity = "ANCIENT" },
-	Inferno = { rarity = "ETHEREAL" },
-	Spirit = { rarity = "ETHEREAL" },
-	Prismatic = { rarity = "GODLY" },
-	Astral = { rarity = "GODLY" }
+    Oak = { rarity = "COMMON" },
+    Pine = { rarity = "COMMON" },
+    Apple = { rarity = "RARE" },
+    Peach = { rarity = "RARE" },
+    Fig = { rarity = "RARE" },
+    Orange = { rarity = "EPIC" },
+    Lemon = { rarity = "EPIC" },
+    Avocado = { rarity = "EPIC" },
+    Cherry = { rarity = "LEGENDARY" },
+    Mango = { rarity = "LEGENDARY" },
+    Coconut = { rarity = "LEGENDARY" },
+    Banana = { rarity = "MYTHIC" },
+    Starfruit = { rarity = "MYTHIC" },
+    DragonFruit = { rarity = "MYTHIC" },
+    Glowing = { rarity = "CELESTIAL" },
+    Blooming = { rarity = "CELESTIAL" },
+    Magic = { rarity = "SECRET" },
+    Pizza = { rarity = "SECRET" },
+    Diamond = { rarity = "DIVINE" },
+    Void = { rarity = "DIVINE" },
+    Mushroom = { rarity = "TRANSCENDENT" },
+    Money = { rarity = "TRANSCENDENT" },
+    Glowshroom = { rarity = "ANCIENT" },
+    Elder = { rarity = "ANCIENT" },
+    Inferno = { rarity = "ETHEREAL" },
+    Spirit = { rarity = "ETHEREAL" },
+    Prismatic = { rarity = "GODLY" },
+    Astral = { rarity = "GODLY" }
 }
 
--- Auto Collect Loop
+-- -------------------------------------------------------------
+-- AUTOMATION THREADS
+-- -------------------------------------------------------------
+
+-- Helper function to reliably trigger any ProximityPrompt
+local function triggerPrompt(prompt)
+    if not prompt or not prompt.Parent then return end
+    if fireproximityprompt then
+        fireproximityprompt(prompt)
+    else
+        pcall(function()
+            prompt.MaxActivationDistance = 9e9
+            prompt.RequiresLineOfSight = false
+            prompt.Exclusivity = Enum.ProximityPromptExclusivity.AlwaysShow
+            prompt:InputHoldBegin()
+            task.wait(prompt.HoldDuration + 0.02)
+            prompt:InputHoldEnd()
+        end)
+    end
+end
+
+-- 1. Seed Auto-Buy Loop (Runs every 0.5s)
 task.spawn(function()
     while true do
         task.wait(0.5)
         if Config.AutoBuyEnabled then
             local bigField = Workspace:FindFirstChild("BigField")
             local conveyorSeeds = bigField and bigField:FindFirstChild("ConveyorSeeds")
-            
-            if not conveyorSeeds then
-                continue
-            end
-            
-            -- Suche durch alle Kinder in ConveyorSeeds
-            for _, seedHolder in ipairs(conveyorSeeds:GetChildren()) do
-                if seedHolder.Name == "SeedHolder" then
-                    -- Finde heraus, welcher Seed in diesem Holder ist
-                    local foundSeedName = nil
-                    for _, child in ipairs(seedHolder:GetChildren()) do
-                        local cName = child.Name
-                        local stripped = string.gsub(cName, "Seed$", "")
-                        
-                        if cName == "AvacadoSeed" then stripped = "Avocado" end
-                        if cName == "DragonfruitSeed" then stripped = "DragonFruit" end
 
-                        if t.Seeds[cName] then
-                            foundSeedName = cName
-                            break
-                        elseif t.Seeds[stripped] then
-                            foundSeedName = stripped
-                            break
+            if conveyorSeeds then
+                for _, seedHolder in ipairs(conveyorSeeds:GetChildren()) do
+                    if seedHolder.Name == "SeedHolder" then
+                        local foundSeedName = nil
+                        for _, child in ipairs(seedHolder:GetChildren()) do
+                            local cName = child.Name
+                            local stripped = string.gsub(cName, "Seed$", "")
+
+                            if cName == "AvacadoSeed" then stripped = "Avocado" end
+                            if cName == "DragonfruitSeed" then stripped = "DragonFruit" end
+
+                            if t.Seeds[cName] then
+                                foundSeedName = cName
+                                break
+                            elseif t.Seeds[stripped] then
+                                foundSeedName = stripped
+                                break
+                            end
                         end
-                    end
-                    
-                    if foundSeedName then
-                        -- Check against the UI state tracked in Config table
-                        local isSeedSelected = Config["Collect_" .. foundSeedName]
-                        local seedRarity = t.Seeds[foundSeedName] and t.Seeds[foundSeedName].rarity
-                        local isRaritySelected = seedRarity and Config["CollectRarity_" .. seedRarity]
-                        
-                        if isSeedSelected or isRaritySelected then
-                            local prompt = seedHolder:FindFirstChildWhichIsA("ProximityPrompt", true)
-                            if prompt then
-                                if fireproximityprompt then
-                                    fireproximityprompt(prompt)
-                                else
-                                    prompt.MaxActivationDistance = 9e9
-                                    prompt.RequiresLineOfSight = false
-                                    prompt.Exclusivity = Enum.ProximityPromptExclusivity.AlwaysShow
-                                    prompt:InputHoldBegin()
-                                    task.wait(prompt.HoldDuration + 0.05)
-                                    prompt:InputHoldEnd()
+
+                        if foundSeedName then
+                            local isSeedSelected = Config["Collect_" .. foundSeedName]
+                            local seedRarity = t.Seeds[foundSeedName] and t.Seeds[foundSeedName].rarity
+                            local isRaritySelected = seedRarity and Config["CollectRarity_" .. seedRarity]
+
+                            if isSeedSelected or isRaritySelected then
+                                local prompt = seedHolder:FindFirstChildWhichIsA("ProximityPrompt", true)
+                                if prompt then
+                                    triggerPrompt(prompt)
+
+                                    task.spawn(function()
+                                        VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.Nine, false, game)
+                                        task.wait(0.000001)
+                                        VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.Nine, false, game)
+                                        task.wait(0.000001)
+                                        VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.Nine, false, game)
+                                        task.wait(0.000001)
+                                        VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.Nine, false, game)
+                                    end)
                                 end
-                                
-                                task.spawn(function()
-                                    VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.Nine, false, game)
-                                    task.wait(0.000001)
-                                    VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.Nine, false, game)
-                                    
-                                    task.wait(0.000001)
-                                    
-                                    VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.Nine, false, game)
-                                    task.wait(0.000001)
-                                    VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.Nine, false, game)
-                                end)
                             end
                         end
                     end
@@ -137,18 +147,15 @@ task.spawn(function()
     end
 end)
 
--- Auto Collect Fruits Loop
+-- 2. Fruit & FindPrompt Auto-Collect Loop (Runs every 0.01s per prompt)
 task.spawn(function()
-    local Players = game:GetService("Players")
-    local LocalPlayer = Players.LocalPlayer
-
     while true do
-        task.wait(0.01)
+        task.wait(0.05)
         if Config.AutoCollectFruits then
             local bigField = Workspace:FindFirstChild("BigField")
             local playerPlots = bigField and bigField:FindFirstChild("PlayerPlots")
             local myPlot = nil
-            
+
             if playerPlots then
                 for _, plot in ipairs(playerPlots:GetChildren()) do
                     if plot:GetAttribute("OwnerUserId") == LocalPlayer.UserId then
@@ -157,7 +164,7 @@ task.spawn(function()
                     end
                 end
             end
-            
+
             if myPlot then
                 local promptsToTrigger = {}
                 for _, desc in ipairs(myPlot:GetDescendants()) do
@@ -168,19 +175,10 @@ task.spawn(function()
                         end
                     end
                 end
-                
+
                 for _, prompt in ipairs(promptsToTrigger) do
                     if not Config.AutoCollectFruits then break end
-                    if fireproximityprompt then
-                        fireproximityprompt(prompt)
-                    else
-                        prompt.MaxActivationDistance = 9e9
-                        prompt.RequiresLineOfSight = false
-                        prompt.Exclusivity = Enum.ProximityPromptExclusivity.AlwaysShow
-                        prompt:InputHoldBegin()
-                        task.wait(prompt.HoldDuration + 0.05)
-                        prompt:InputHoldEnd()
-                    end
+                    triggerPrompt(prompt)
                     task.wait(0.01)
                 end
             end
@@ -188,10 +186,8 @@ task.spawn(function()
     end
 end)
 
-
--- Auto Sell Loop
+-- 3. Auto-Sell RemoteFunction Loop (Runs every 0.2s)
 task.spawn(function()
-    local ReplicatedStorage = game:GetService("ReplicatedStorage")
     while true do
         task.wait(0.2)
         if Config.SellAllEnabled then
@@ -199,10 +195,13 @@ task.spawn(function()
             pcall(function()
                 sellRemote = ReplicatedStorage.Packages._Index["sleitnick_knit@1.6.0"].knit.Services.SellStandService.RF.SellAll
             end)
+
             if not sellRemote then
                 local function findRemote(parent)
                     for _, child in ipairs(parent:GetChildren()) do
-                        if child:IsA("RemoteFunction") and child.Name == "SellAll" then return child end
+                        if child:IsA("RemoteFunction") and child.Name == "SellAll" then
+                            return child
+                        end
                         local found = findRemote(child)
                         if found then return found end
                     end
@@ -210,7 +209,7 @@ task.spawn(function()
                 end
                 sellRemote = findRemote(ReplicatedStorage)
             end
-            
+
             if sellRemote then
                 pcall(function()
                     sellRemote:InvokeServer()
@@ -220,16 +219,18 @@ task.spawn(function()
     end
 end)
 
+-- -------------------------------------------------------------
 -- UI INTERFACE CREATION
--- TAB: MAIN
+-- -------------------------------------------------------------
+
+-- TAB 1: MAIN
 local seedsSection = mainTab:CreateSection("Seeds")
 
 seedsSection:CreateToggleSwitch("Enable Auto Collect", false, function(val)
     Config.AutoBuyEnabled = val
-    if val then lib:Notify("Farm", "Auto Collect Active!", 2.0) end
+    if val then lib:Notify("Farm", "Auto Seed Collect Active!", 2.0) end
 end)
 
-local SeedCheckboxes = {}
 local SeedDropdown = seedsSection:CreateDropDown("Select Seed", function() end)
 
 local sortedSeeds = {}
@@ -240,10 +241,9 @@ table.sort(sortedSeeds)
 
 for _, seedName in ipairs(sortedSeeds) do
     Config["Collect_" .. seedName] = false
-    local chk = SeedDropdown:AddCheckbox(seedName, function(state)
+    SeedDropdown:AddCheckbox(seedName, function(state)
         Config["Collect_" .. seedName] = state
     end)
-    SeedCheckboxes[seedName] = chk
 end
 
 local RarityDropdown = seedsSection:CreateDropDown("Select by Rarity", function() end)
@@ -272,14 +272,14 @@ fruitsSection:CreateToggleSwitch("Auto Collect Fruits", false, function(val)
     if val then lib:Notify("Farm", "Auto Collect Fruits Active!", 2.0) end
 end)
 
--- TAB: AUTOMATION
+-- TAB 2: AUTOMATION
 local sellSection = autoTab:CreateSection("Sell")
 sellSection:CreateToggleSwitch("Sell All", false, function(val)
     Config.SellAllEnabled = val
-    if val then lib:Notify("Farm", "Sell All Active!", 2.0) end
+    if val then lib:Notify("Automation", "Sell All Active (0.2s)!", 2.0) end
 end)
 
--- TAB: SETTINGS
+-- TAB 3: SETTINGS
 local themeDrop = settingsTab:CreateDropDown("Select UI Theme", function() end)
 local themesList = {"emerald", "cyber", "royal", "dark", "midnight", "blood", "gold", "neon"}
 for _, themeName in ipairs(themesList) do
@@ -288,9 +288,9 @@ for _, themeName in ipairs(themesList) do
     end)
 end
 
-settingsTab:CreateSlider("Window Transparency", 0, 90, 25, function(val)
+settingsTab:CreateSlider("Window Transparency", 0, 90, 20, function(val)
     int:SetTransparency(val / 100)
 end)
 
-lib:Notify("Greedy Growers", "Loaded successfully! Press 'K' to hide or show GUI.", 5.0)
-print("[Greedy Growers] Auto Seed Collection Loaded Successfully!")
+lib:Notify("Greedy Growers", "Loaded successfully! Press 'K' to toggle GUI.", 4.0)
+print("[Greedy Growers] Automation Suite Ready & Running!")
