@@ -76,15 +76,23 @@ t.Seeds = {
 -- Helper function to reliably trigger any ProximityPrompt
 local function triggerPrompt(prompt)
     if not prompt or not prompt.Parent then return end
+
+    pcall(function()
+        prompt.MaxActivationDistance = 9e9
+        prompt.RequiresLineOfSight = false
+        prompt.Exclusivity = Enum.ProximityPromptExclusivity.AlwaysShow
+        prompt.HoldDuration = 0
+        prompt.Enabled = true
+    end)
+
     if fireproximityprompt then
-        fireproximityprompt(prompt)
+        pcall(function()
+            fireproximityprompt(prompt)
+        end)
     else
         pcall(function()
-            prompt.MaxActivationDistance = 9e9
-            prompt.RequiresLineOfSight = false
-            prompt.Exclusivity = Enum.ProximityPromptExclusivity.AlwaysShow
             prompt:InputHoldBegin()
-            task.wait(prompt.HoldDuration + 0.02)
+            task.wait(0.01)
             prompt:InputHoldEnd()
         end)
     end
