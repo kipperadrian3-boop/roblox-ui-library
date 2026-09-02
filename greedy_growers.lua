@@ -114,13 +114,13 @@ task.spawn(function()
                                 
                                 task.spawn(function()
                                     VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.Nine, false, game)
-                                    task.wait(0.01)
+                                    task.wait(0.000001)
                                     VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.Nine, false, game)
                                     
-                                    task.wait(0.01)
+                                    task.wait(0.000001)
                                     
                                     VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.Nine, false, game)
-                                    task.wait(0.01)
+                                    task.wait(0.000001)
                                     VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.Nine, false, game)
                                 end)
                             end
