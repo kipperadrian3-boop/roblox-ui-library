@@ -178,7 +178,7 @@ task.spawn(function()
                 for _, desc in ipairs(myPlot:GetDescendants()) do
                     if desc:IsA("ProximityPrompt") then
                         local parent = desc.Parent
-                        if desc.Name == "FindPrompt" or (parent and parent.Parent and parent.Parent.Name == "FruitSpawns") then
+                        if parent and parent.Parent and parent.Parent.Name == "FruitSpawns" then
                             table.insert(promptsToTrigger, desc)
                         end
                     end
