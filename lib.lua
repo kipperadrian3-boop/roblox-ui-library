@@ -1338,6 +1338,7 @@ function Library:CreateInterface(titleText, descText, discordLink, position, the
             local isOpen = true
             
             local SectionFrame = create("Frame", {
+                Name = "Section_" .. tostring(sectionTitle),
                 Size = UDim2.new(1, 0, 0, 36),
                 BackgroundColor3 = InterfaceObj.Theme.HeaderBg,
                 BackgroundTransparency = math.clamp(glassTransparency - 0.1, 0, 1),
@@ -1358,10 +1359,10 @@ function Library:CreateInterface(titleText, descText, discordLink, position, the
                 Size = UDim2.new(1, -40, 1, 0),
                 Position = UDim2.new(0, 12, 0, 0),
                 BackgroundTransparency = 1,
-                Text = sectionTitle,
+                Text = sectionTitle or "Section",
                 TextColor3 = InterfaceObj.Theme.TextColor,
                 TextSize = 13,
-                Font = Enum.Font.GothamMedium,
+                Font = Enum.Font.GothamBold,
                 TextXAlignment = Enum.TextXAlignment.Left,
                 Parent = HeaderBtn
             })
@@ -1378,9 +1379,11 @@ function Library:CreateInterface(titleText, descText, discordLink, position, the
             })
             
             local ItemsContainer = create("Frame", {
-                Size = UDim2.new(1, 0, 1, -36),
+                Name = "ItemsContainer",
+                Size = UDim2.new(1, 0, 0, 0),
                 Position = UDim2.new(0, 0, 0, 36),
                 BackgroundTransparency = 1,
+                ClipsDescendants = true,
                 Parent = SectionFrame
             })
             
@@ -1399,13 +1402,21 @@ function Library:CreateInterface(titleText, descText, discordLink, position, the
             })
             
             local function updateSize()
+                local contentY = UIListLayout.AbsoluteContentSize.Y
+                ItemsContainer.Size = UDim2.new(1, 0, 0, contentY + 12)
                 if isOpen then
-                    local targetHeight = 36 + UIListLayout.AbsoluteContentSize.Y + 12
-                    TweenService:Create(SectionFrame, TweenInfo.new(0.3, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {Size = UDim2.new(1, 0, 0, targetHeight)}):Play()
-                    TweenService:Create(Arrow, TweenInfo.new(0.3), {Rotation = 0}):Play()
+                    ItemsContainer.Visible = true
+                    local targetHeight = 36 + contentY + 12
+                    TweenService:Create(SectionFrame, TweenInfo.new(0.25, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {Size = UDim2.new(1, 0, 0, targetHeight)}):Play()
+                    TweenService:Create(Arrow, TweenInfo.new(0.25), {Rotation = 0}):Play()
                 else
-                    TweenService:Create(SectionFrame, TweenInfo.new(0.3, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {Size = UDim2.new(1, 0, 0, 36)}):Play()
-                    TweenService:Create(Arrow, TweenInfo.new(0.3), {Rotation = -90}):Play()
+                    TweenService:Create(SectionFrame, TweenInfo.new(0.25, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {Size = UDim2.new(1, 0, 0, 36)}):Play()
+                    TweenService:Create(Arrow, TweenInfo.new(0.25), {Rotation = -90}):Play()
+                    task.delay(0.25, function()
+                        if not isOpen then
+                            ItemsContainer.Visible = false
+                        end
+                    end)
                 end
             end
             
@@ -1415,6 +1426,7 @@ function Library:CreateInterface(titleText, descText, discordLink, position, the
             
             HeaderBtn.MouseButton1Click:Connect(function()
                 isOpen = not isOpen
+                if isOpen then ItemsContainer.Visible = true end
                 updateSize()
             end)
             
@@ -1426,24 +1438,83 @@ function Library:CreateInterface(titleText, descText, discordLink, position, the
             
             local SectionObj = {}
             
+            local function getRootFrame(res)
+                if typeof(res) == "Instance" then
+                    return res
+                elseif type(res) == "table" and res.Card then
+                    return res.Card
+                end
+                return nil
+            end
+            
             function SectionObj:CreateToggleSwitch(...)
-                local res = TabObj.CreateToggleSwitch(TabObj, ...)
-                if res and res.Card then res.Card.Parent = ItemsContainer end
+                local res = TabObj:CreateToggleSwitch(...)
+                local frame = getRootFrame(res)
+                if frame then frame.Parent = ItemsContainer end
+                updateSize()
                 return res
             end
+            
             function SectionObj:CreateCheckbox(...)
-                local res = TabObj.CreateCheckbox(TabObj, ...)
-                if res and res.Card then res.Card.Parent = ItemsContainer end
+                local res = TabObj:CreateCheckbox(...)
+                local frame = getRootFrame(res)
+                if frame then frame.Parent = ItemsContainer end
+                updateSize()
                 return res
             end
-            function SectionObj:CreateDropDown(...)
-                local res = TabObj.CreateDropDown(TabObj, ...)
-                if res and res.DropCard then res.DropCard.Parent = ItemsContainer end
+
+            function SectionObj:CreateSlider(...)
+                local res = TabObj:CreateSlider(...)
+                local frame = getRootFrame(res)
+                if frame then frame.Parent = ItemsContainer end
+                updateSize()
                 return res
             end
+
+            function SectionObj:CreateTextbox(...)
+                local res = TabObj:CreateTextbox(...)
+                local frame = getRootFrame(res)
+                if frame then frame.Parent = ItemsContainer end
+                updateSize()
+                return res
+            end
+
+            function SectionObj:CreateKeybind(...)
+                local res = TabObj:CreateKeybind(...)
+                local frame = getRootFrame(res)
+                if frame then frame.Parent = ItemsContainer end
+                updateSize()
+                return res
+            end
+
+            function SectionObj:CreateButton(...)
+                local res = TabObj:CreateButton(...)
+                local frame = getRootFrame(res)
+                if frame then frame.Parent = ItemsContainer end
+                updateSize()
+                return res
+            end
+
             function SectionObj:CreateComment(...)
-                local res = TabObj.CreateComment(TabObj, ...)
-                if res and res.Card then res.Card.Parent = ItemsContainer end
+                local res = TabObj:CreateComment(...)
+                local frame = getRootFrame(res)
+                if frame then frame.Parent = ItemsContainer end
+                updateSize()
+                return res
+            end
+
+            function SectionObj:CreateDropDown(...)
+                local res = TabObj:CreateDropDown(...)
+                local frame = getRootFrame(res)
+                if frame then
+                    frame.Parent = ItemsContainer
+                    frame:GetPropertyChangedSignal("Size"):Connect(function()
+                        if isOpen then
+                            updateSize()
+                        end
+                    end)
+                end
+                updateSize()
                 return res
             end
             
