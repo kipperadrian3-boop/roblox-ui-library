@@ -1,6 +1,6 @@
 --[[
     Greedy Growers - Auto Seed Buyer (greedy_growers.lua)
-    Obsidian UI Migration
+    Universal JSON Engine Auto-Save Enabled
 ]]
 
 local Workspace = game:GetService("Workspace")
@@ -8,33 +8,27 @@ local VirtualInputManager = game:GetService("VirtualInputManager")
 
 local REPO_URL = "https://raw.githubusercontent.com/kipperadrian3-boop/roblox-ui-library/main/"
 
--- Load Obsidian UI Library & Addons
-local Library = loadstring(game:HttpGet(REPO_URL .. "lib.lua"))()
-local ThemeManager = loadstring(game:HttpGet(REPO_URL .. "addons/ThemeManager.lua"))()
-local SaveManager = loadstring(game:HttpGet(REPO_URL .. "addons/SaveManager.lua"))()
+-- Load UI Library Framework (lib.lua with dynamic cache buster & JSON auto-save engine)
+local success, lib = pcall(function()
+    return loadstring(game:HttpGet(REPO_URL .. "lib.lua?v=" .. tostring(math.random(1, 9999999))))()
+end)
 
-local Options = Library.Options
-local Toggles = Library.Toggles
+if not success or not lib or type(lib) ~= "table" then
+    warn("[Greedy Growers Error] Could not load UI Library from GitHub!")
+    return
+end
 
--- Create Window
-local Window = Library:CreateWindow({
-	Title = "Greedy Growers",
-	Footer = "Auto Seed Collection",
-	Icon = 0,
-	NotifySide = "Right",
-	ShowCustomCursor = true,
-})
+-- Create Interface
+local int = lib:CreateInterface("Greedy Growers", "Auto Seed Collection", "", "bottom left", "emerald", 0.25)
 
--- Create Tabs
-local Tabs = {
-	Main = Window:AddTab("Auto Collect"),
-	["UI Settings"] = Window:AddTab("UI Settings"),
+-- Tabs
+local collectTab = int:CreateTab("Auto Collect", "Conveyor Belt Automation", "op", true)
+local settingsTab = int:CreateTab("Settings", "UI Customization", "misc")
+
+-- Configuration State (JSON Auto-Saved by lib.lua)
+local Config = {
+    AutoBuyEnabled = false
 }
-
-local CollectGroup = Tabs.Main:AddGroupbox({
-	Side = "Left",
-	Name = "Conveyor Belt Automation",
-})
 
 -- Seed Config
 local t = {}
@@ -69,38 +63,11 @@ t.Seeds = {
 	Astral = { rarity = "GODLY" }
 }
 
--- Create list of seed names for the dropdown
-local SeedNames = {}
-for seedName, _ in pairs(t.Seeds) do
-    table.insert(SeedNames, seedName)
-end
-table.sort(SeedNames)
-
--- UI INTERFACE CREATION
-CollectGroup:AddToggle("AutoBuyEnabled", {
-    Text = "Enable Auto Collect",
-    Default = false,
-    Tooltip = "Turn on automation for seed collection",
-    Callback = function(val)
-        if val then Library:Notify({ Title = "Farm", Description = "Auto Collect Active!", Time = 2.0 }) end
-    end
-})
-
-CollectGroup:AddDropdown("SelectedSeeds", {
-    Values = SeedNames,
-    Default = {},
-    Multi = true,
-    Text = "Select Seeds to Collect",
-    Tooltip = "Select which seeds to automatically collect",
-    Searchable = true
-})
-
 -- Auto Collect Loop
 task.spawn(function()
     while true do
         task.wait(0.5)
-        -- Accessing via Toggles.AutoBuyEnabled.Value
-        if Toggles.AutoBuyEnabled and Toggles.AutoBuyEnabled.Value then
+        if Config.AutoBuyEnabled then
             local bigField = Workspace:FindFirstChild("BigField")
             local conveyorSeeds = bigField and bigField:FindFirstChild("ConveyorSeeds")
             
@@ -130,10 +97,8 @@ task.spawn(function()
                     end
                     
                     if foundSeedName then
-                        -- Check against the Multi-Dropdown state
-                        -- Multi dropdowns store `{ ["SeedName"] = true }` in `Options.SelectedSeeds.Value`
-                        local selected = Options.SelectedSeeds.Value
-                        if selected and selected[foundSeedName] then
+                        -- Check against the UI state tracked in Config table
+                        if Config["Collect_" .. foundSeedName] then
                             local prompt = seedHolder:FindFirstChildWhichIsA("ProximityPrompt", true)
                             if prompt then
                                 if fireproximityprompt then
@@ -167,16 +132,89 @@ task.spawn(function()
     end
 end)
 
--- UI SETTINGS TAB
-ThemeManager:SetLibrary(Library)
-SaveManager:SetLibrary(Library)
+-- UI INTERFACE CREATION
 
-SaveManager:IgnoreThemeSettings()
-SaveManager:SetIgnoreIndexes({ 'MenuKeybind' })
-ThemeManager:SetFolder('GreedyGrowers')
-SaveManager:SetFolder('GreedyGrowers/Autobuy')
+collectTab:CreateComment("--- Main Toggle ---")
+collectTab:CreateToggleSwitch("Enable Auto Collect", false, function(val)
+    Config.AutoBuyEnabled = val
+    if val then lib:Notify("Farm", "Auto Collect Active!", 2.0) end
+end)
 
-SaveManager:BuildConfigSection(Tabs['UI Settings'])
-ThemeManager:BuildThemeSection(Tabs['UI Settings'])
+collectTab:CreateComment("--- Seed Selection ---")
 
-SaveManager:LoadAutoloadConfig()
+-- Store references to the seed buttons so we can update their text
+local SeedButtons = {}
+
+local SeedDropdown = collectTab:CreateDropDown("Select Seed", function() end)
+
+-- Create the buttons in the Seed Dropdown
+local sortedSeeds = {}
+for seedName, _ in pairs(t.Seeds) do
+    table.insert(sortedSeeds, seedName)
+end
+table.sort(sortedSeeds)
+
+for _, seedName in ipairs(sortedSeeds) do
+    Config["Collect_" .. seedName] = false
+    
+    local btn = SeedDropdown:AddButton("[ ] " .. seedName, function()
+        -- Toggle state
+        Config["Collect_" .. seedName] = not Config["Collect_" .. seedName]
+        
+        -- Update text based on new state
+        if Config["Collect_" .. seedName] then
+            SeedButtons[seedName].Text = "[X] " .. seedName
+        else
+            SeedButtons[seedName].Text = "[ ] " .. seedName
+        end
+    end)
+    
+    SeedButtons[seedName] = btn
+end
+
+collectTab:CreateComment("--- Rarity Selection ---")
+
+local RarityDropdown = collectTab:CreateDropDown("Select by Rarity", function() end)
+
+local RarityList = {
+    "COMMON", "RARE", "EPIC", "LEGENDARY", "MYTHIC", "CELESTIAL", 
+    "SECRET", "DIVINE", "TRANSCENDENT", "ANCIENT", "ETHEREAL", "GODLY"
+}
+
+for _, rarity in ipairs(RarityList) do
+    local hasSeedsInRarity = false
+    for seedName, info in pairs(t.Seeds) do
+        if info.rarity == rarity then hasSeedsInRarity = true break end
+    end
+    
+    if hasSeedsInRarity then
+        RarityDropdown:AddButton("Select all " .. rarity, function()
+            -- Set all seeds of this rarity to true and update their buttons
+            for seedName, info in pairs(t.Seeds) do
+                if info.rarity == rarity then
+                    Config["Collect_" .. seedName] = true
+                    if SeedButtons[seedName] then
+                        SeedButtons[seedName].Text = "[X] " .. seedName
+                    end
+                end
+            end
+            lib:Notify("Selection", "Selected all " .. rarity .. " seeds!", 2.0)
+        end)
+    end
+end
+
+-- TAB: SETTINGS
+local themeDrop = settingsTab:CreateDropDown("Select UI Theme", function() end)
+local themesList = {"emerald", "cyber", "royal", "dark", "midnight", "blood", "gold", "neon"}
+for _, themeName in ipairs(themesList) do
+    themeDrop:AddButton("Theme: " .. themeName:upper(), function()
+        int:SetTheme(themeName)
+    end)
+end
+
+settingsTab:CreateSlider("Window Transparency", 0, 90, 25, function(val)
+    int:SetTransparency(val / 100)
+end)
+
+lib:Notify("Greedy Growers", "Loaded successfully! Press 'K' to hide or show GUI.", 5.0)
+print("[Greedy Growers] Auto Seed Collection Loaded Successfully!")
