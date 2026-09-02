@@ -98,7 +98,11 @@ task.spawn(function()
                     
                     if foundSeedName then
                         -- Check against the UI state tracked in Config table
-                        if Config["Collect_" .. foundSeedName] then
+                        local isSeedSelected = Config["Collect_" .. foundSeedName]
+                        local seedRarity = t.Seeds[foundSeedName] and t.Seeds[foundSeedName].rarity
+                        local isRaritySelected = seedRarity and Config["CollectRarity_" .. seedRarity]
+                        
+                        if isSeedSelected or isRaritySelected then
                             local prompt = seedHolder:FindFirstChildWhichIsA("ProximityPrompt", true)
                             if prompt then
                                 if fireproximityprompt then
@@ -180,18 +184,11 @@ for _, rarity in ipairs(RarityList) do
     end
     
     if hasSeedsInRarity then
+        Config["CollectRarity_" .. rarity] = false
         RarityDropdown:AddCheckbox(rarity, function(state)
-            -- Set all seeds of this rarity to the new state and update their checkboxes
-            for seedName, info in pairs(t.Seeds) do
-                if info.rarity == rarity then
-                    Config["Collect_" .. seedName] = state
-                    if SeedCheckboxes[seedName] then
-                        SeedCheckboxes[seedName]:SetValue(state)
-                    end
-                end
-            end
+            Config["CollectRarity_" .. rarity] = state
             local action = state and "Selected" or "Deselected"
-            lib:Notify("Selection", action .. " all " .. rarity .. " seeds!", 2.0)
+            lib:Notify("Selection", action .. " rarity: " .. rarity, 2.0)
         end)
     end
 end

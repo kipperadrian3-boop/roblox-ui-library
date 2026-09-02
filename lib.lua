@@ -1269,64 +1269,50 @@ function Library:CreateInterface(titleText, descText, discordLink, position, the
 
                 InterfaceObj.ConfigState[chkKey] = chkState
 
-                local ChkFrame = create("Frame", {
+                local ChkFrame = create("TextButton", {
                     Size = UDim2.new(1, 0, 0, 28),
                     BackgroundColor3 = InterfaceObj.Theme.MainBg,
+                    Text = "",
+                    AutoButtonColor = false,
                     Parent = ItemsContainer
                 })
                 create("UICorner", { CornerRadius = UDim.new(0, 5), Parent = ChkFrame })
+                
+                local Stroke = create("UIStroke", {
+                    Color = InterfaceObj.Theme.Accent,
+                    Thickness = 1,
+                    Transparency = chkState and 0 or 1,
+                    ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
+                    Parent = ChkFrame
+                })
 
                 local ChkLabel = create("TextLabel", {
-                    Size = UDim2.new(1, -35, 1, 0),
+                    Size = UDim2.new(1, -20, 1, 0),
                     Position = UDim2.new(0, 10, 0, 0),
                     BackgroundTransparency = 1,
                     Text = chkText,
-                    TextColor3 = InterfaceObj.Theme.TextColor,
+                    TextColor3 = chkState and InterfaceObj.Theme.Accent or InterfaceObj.Theme.TextColor,
                     TextSize = 12,
                     Font = Enum.Font.Gotham,
                     TextXAlignment = Enum.TextXAlignment.Left,
                     Parent = ChkFrame
                 })
 
-                local ChkBox = create("TextButton", {
-                    Size = UDim2.new(0, 18, 0, 18),
-                    Position = UDim2.new(1, -24, 0.5, -9),
-                    BackgroundColor3 = InterfaceObj.Theme.CardBg,
-                    Text = "",
-                    Parent = ChkFrame
-                })
-                create("UICorner", { CornerRadius = UDim.new(0, 4), Parent = ChkBox })
-
-                local Ind = create("Frame", {
-                    Size = UDim2.new(0, 10, 0, 10),
-                    Position = UDim2.new(0.5, -5, 0.5, -5),
-                    BackgroundColor3 = InterfaceObj.Theme.Accent,
-                    Visible = chkState,
-                    Parent = ChkBox
-                })
-                create("UICorner", { CornerRadius = UDim.new(0, 2), Parent = Ind })
-
                 local function toggleChk()
                     chkState = not chkState
-                    Ind.Visible = chkState
-                    ChkBox.BackgroundColor3 = chkState and InterfaceObj.Theme.Accent or InterfaceObj.Theme.CardBg
+                    Stroke.Transparency = chkState and 0 or 1
+                    ChkLabel.TextColor3 = chkState and InterfaceObj.Theme.Accent or InterfaceObj.Theme.TextColor
                     InterfaceObj.ConfigState[chkKey] = chkState
                     autoSaveConfig()
                     if chkCallback then pcall(chkCallback, chkState) end
                 end
 
-                ChkBox.MouseButton1Click:Connect(toggleChk)
-                ChkLabel.InputBegan:Connect(function(input)
-                    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-                        toggleChk()
-                    end
-                end)
+                ChkFrame.MouseButton1Click:Connect(toggleChk)
 
                 table.insert(themeUpdaters, function(t)
                     ChkFrame.BackgroundColor3 = t.MainBg
-                    ChkLabel.TextColor3 = t.TextColor
-                    ChkBox.BackgroundColor3 = chkState and t.Accent or t.CardBg
-                    Ind.BackgroundColor3 = t.Accent
+                    Stroke.Color = t.Accent
+                    ChkLabel.TextColor3 = chkState and t.Accent or t.TextColor
                 end)
 
                 if savedChk ~= nil and chkCallback then
