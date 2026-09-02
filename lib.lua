@@ -219,22 +219,24 @@ function Library:Notify(title, message, duration, icon)
         end
     end
 
+    local currentTheme = Library.CurrentTheme or DefaultThemes.royal
+
     local Toast = create("Frame", {
         Size = UDim2.new(1, 0, 0, 56),
-        BackgroundColor3 = Color3.fromRGB(20, 22, 32),
+        BackgroundColor3 = currentTheme.MainBg,
         BackgroundTransparency = 0.15,
         BorderSizePixel = 0,
         Parent = NotificationContainer
     })
     create("UICorner", { CornerRadius = UDim.new(0, 8), Parent = Toast })
-    local Stroke = create("UIStroke", { Color = Color3.fromRGB(130, 85, 245), Thickness = 1.5, Parent = Toast })
+    local Stroke = create("UIStroke", { Color = currentTheme.Accent, Thickness = 1.5, Parent = Toast })
 
     local TitleLabel = create("TextLabel", {
         Size = UDim2.new(1, -20, 0, 20),
         Position = UDim2.new(0, 12, 0, 6),
         BackgroundTransparency = 1,
         Text = title or "Notification",
-        TextColor3 = Color3.fromRGB(255, 255, 255),
+        TextColor3 = currentTheme.TextColor,
         TextSize = 13,
         Font = Enum.Font.GothamBold,
         TextXAlignment = Enum.TextXAlignment.Left,
@@ -246,7 +248,7 @@ function Library:Notify(title, message, duration, icon)
         Position = UDim2.new(0, 12, 0, 26),
         BackgroundTransparency = 1,
         Text = message or "",
-        TextColor3 = Color3.fromRGB(170, 175, 205),
+        TextColor3 = currentTheme.SubText,
         TextSize = 11,
         Font = Enum.Font.Gotham,
         TextWrapped = true,
@@ -566,6 +568,7 @@ function Library:CreateInterface(titleText, descText, discordLink, position, the
         InterfaceObj.Theme = t
         InterfaceObj.ThemeName = key
         theme = t
+        Library.CurrentTheme = t
         for _, updater in ipairs(themeUpdaters) do
             pcall(updater, t)
         end
@@ -671,7 +674,9 @@ function Library:CreateInterface(titleText, descText, discordLink, position, the
         -- -------------------------------------------------------------
 
         -- 1. Animated Pill Switch Toggle (JSON Auto-Saved)
-        function TabObj:CreateToggleSwitch(labelTitle, defaultState, callback)
+
+        local function attachComponents(Obj, TargetContainer, tabName)
+        function Obj:CreateToggleSwitch(labelTitle, defaultState, callback)
             local configKey = tabName .. "_" .. labelTitle
             local savedVal = InterfaceObj.ConfigState[configKey]
             local state = (savedVal ~= nil) and savedVal or (defaultState or false)
@@ -683,7 +688,7 @@ function Library:CreateInterface(titleText, descText, discordLink, position, the
                 BackgroundColor3 = InterfaceObj.Theme.CardBg,
                 BackgroundTransparency = math.clamp(glassTransparency - 0.1, 0, 1),
                 BorderSizePixel = 0,
-                Parent = TabContent
+                Parent = TargetContainer
             })
             create("UICorner", { CornerRadius = UDim.new(0, 6), Parent = Card })
 
@@ -755,7 +760,109 @@ function Library:CreateInterface(titleText, descText, discordLink, position, the
         end
 
         -- Checkbox
-        function TabObj:CreateCheckbox(labelTitle, callback)
+        function Obj:CreateCheckbox(labelTitle, callback)
+        end
+
+        attachComponents(TabObj, TabContent, tabName)
+
+        function TabObj:CreateSection(sectionTitle)
+            local isOpen = true
+            
+            local SectionFrame = create("Frame", {
+                Size = UDim2.new(1, 0, 0, 36),
+                BackgroundColor3 = InterfaceObj.Theme.HeaderBg,
+                BackgroundTransparency = math.clamp(glassTransparency - 0.1, 0, 1),
+                BorderSizePixel = 0,
+                ClipsDescendants = true,
+                Parent = TabContent
+            })
+            create("UICorner", { CornerRadius = UDim.new(0, 6), Parent = SectionFrame })
+            
+            local HeaderBtn = create("TextButton", {
+                Size = UDim2.new(1, 0, 0, 36),
+                BackgroundTransparency = 1,
+                Text = "",
+                Parent = SectionFrame
+            })
+            
+            local TitleLabel = create("TextLabel", {
+                Size = UDim2.new(1, -40, 1, 0),
+                Position = UDim2.new(0, 12, 0, 0),
+                BackgroundTransparency = 1,
+                Text = sectionTitle,
+                TextColor3 = InterfaceObj.Theme.TextColor,
+                TextSize = 13,
+                Font = Enum.Font.GothamMedium,
+                TextXAlignment = Enum.TextXAlignment.Left,
+                Parent = HeaderBtn
+            })
+            
+            local Arrow = create("TextLabel", {
+                Size = UDim2.new(0, 20, 0, 20),
+                Position = UDim2.new(1, -28, 0.5, -10),
+                BackgroundTransparency = 1,
+                Text = "▼",
+                TextColor3 = InterfaceObj.Theme.SubText,
+                TextSize = 11,
+                Font = Enum.Font.GothamBold,
+                Parent = HeaderBtn
+            })
+            
+            local ItemsContainer = create("Frame", {
+                Size = UDim2.new(1, 0, 1, -36),
+                Position = UDim2.new(0, 0, 0, 36),
+                BackgroundTransparency = 1,
+                Parent = SectionFrame
+            })
+            
+            local UIListLayout = create("UIListLayout", {
+                SortOrder = Enum.SortOrder.LayoutOrder,
+                Padding = UDim.new(0, 6),
+                HorizontalAlignment = Enum.HorizontalAlignment.Center,
+                Parent = ItemsContainer
+            })
+            create("UIPadding", {
+                PaddingTop = UDim.new(0, 6),
+                PaddingBottom = UDim.new(0, 6),
+                PaddingLeft = UDim.new(0, 6),
+                PaddingRight = UDim.new(0, 6),
+                Parent = ItemsContainer
+            })
+            
+            local function updateSize()
+                if isOpen then
+                    local targetHeight = 36 + UIListLayout.AbsoluteContentSize.Y + 12
+                    TweenService:Create(SectionFrame, TweenInfo.new(0.3, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {Size = UDim2.new(1, 0, 0, targetHeight)}):Play()
+                    TweenService:Create(Arrow, TweenInfo.new(0.3), {Rotation = 0}):Play()
+                else
+                    TweenService:Create(SectionFrame, TweenInfo.new(0.3, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {Size = UDim2.new(1, 0, 0, 36)}):Play()
+                    TweenService:Create(Arrow, TweenInfo.new(0.3), {Rotation = -90}):Play()
+                end
+            end
+            
+            UIListLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+                if isOpen then updateSize() end
+            end)
+            
+            HeaderBtn.MouseButton1Click:Connect(function()
+                isOpen = not isOpen
+                updateSize()
+            end)
+            
+            table.insert(themeUpdaters, function(t)
+                SectionFrame.BackgroundColor3 = t.HeaderBg
+                TitleLabel.TextColor3 = t.TextColor
+                Arrow.TextColor3 = t.SubText
+            end)
+            
+            local SectionObj = {}
+            attachComponents(SectionObj, ItemsContainer, tabName)
+            
+            -- Initialize size
+            updateSize()
+            
+            return SectionObj
+        end
             return TabObj:CreateToggleSwitch(labelTitle, false, callback)
         end
 

@@ -22,8 +22,8 @@ end
 local int = lib:CreateInterface("Greedy Growers", "Auto Seed Collection", "", "bottom left", "emerald", 0.25)
 
 -- Tabs
-local collectTab = int:CreateTab("Auto Collect", "Conveyor Belt Automation", "op", true)
-local fruitsTab = int:CreateTab("Fruits", "Fruit Farming", "op")
+local mainTab = int:CreateTab("Main", "Auto Collection", "op", true)
+local autoTab = int:CreateTab("Automation", "Farming & Selling", "op")
 local settingsTab = int:CreateTab("Settings", "UI Customization", "misc")
 
 -- Configuration State (JSON Auto-Saved by lib.lua)
@@ -188,22 +188,50 @@ task.spawn(function()
     end
 end)
 
--- UI INTERFACE CREATION
 
-collectTab:CreateComment("--- Main Toggle ---")
-collectTab:CreateToggleSwitch("Enable Auto Collect", false, function(val)
+-- Auto Sell Loop
+task.spawn(function()
+    local ReplicatedStorage = game:GetService("ReplicatedStorage")
+    while true do
+        task.wait(0.2)
+        if Config.SellAllEnabled then
+            local sellRemote = nil
+            pcall(function()
+                sellRemote = ReplicatedStorage.Packages._Index["sleitnick_knit@1.6.0"].knit.Services.SellStandService.RF.SellAll
+            end)
+            if not sellRemote then
+                local function findRemote(parent)
+                    for _, child in ipairs(parent:GetChildren()) do
+                        if child:IsA("RemoteFunction") and child.Name == "SellAll" then return child end
+                        local found = findRemote(child)
+                        if found then return found end
+                    end
+                    return nil
+                end
+                sellRemote = findRemote(ReplicatedStorage)
+            end
+            
+            if sellRemote then
+                pcall(function()
+                    sellRemote:InvokeServer()
+                end)
+            end
+        end
+    end
+end)
+
+-- UI INTERFACE CREATION
+-- TAB: MAIN
+local seedsSection = mainTab:CreateSection("Seeds")
+
+seedsSection:CreateToggleSwitch("Enable Auto Collect", false, function(val)
     Config.AutoBuyEnabled = val
     if val then lib:Notify("Farm", "Auto Collect Active!", 2.0) end
 end)
 
-collectTab:CreateComment("--- Seed Selection ---")
-
--- Store references to the seed checkboxes so we can update their state
 local SeedCheckboxes = {}
+local SeedDropdown = seedsSection:CreateDropDown("Select Seed", function() end)
 
-local SeedDropdown = collectTab:CreateDropDown("Select Seed", function() end)
-
--- Create the checkboxes in the Seed Dropdown
 local sortedSeeds = {}
 for seedName, _ in pairs(t.Seeds) do
     table.insert(sortedSeeds, seedName)
@@ -212,29 +240,22 @@ table.sort(sortedSeeds)
 
 for _, seedName in ipairs(sortedSeeds) do
     Config["Collect_" .. seedName] = false
-    
     local chk = SeedDropdown:AddCheckbox(seedName, function(state)
         Config["Collect_" .. seedName] = state
     end)
-    
     SeedCheckboxes[seedName] = chk
 end
 
-collectTab:CreateComment("--- Rarity Selection ---")
-
-local RarityDropdown = collectTab:CreateDropDown("Select by Rarity", function() end)
-
+local RarityDropdown = seedsSection:CreateDropDown("Select by Rarity", function() end)
 local RarityList = {
     "COMMON", "RARE", "EPIC", "LEGENDARY", "MYTHIC", "CELESTIAL", 
     "SECRET", "DIVINE", "TRANSCENDENT", "ANCIENT", "ETHEREAL", "GODLY"
 }
-
 for _, rarity in ipairs(RarityList) do
     local hasSeedsInRarity = false
     for seedName, info in pairs(t.Seeds) do
         if info.rarity == rarity then hasSeedsInRarity = true break end
     end
-    
     if hasSeedsInRarity then
         Config["CollectRarity_" .. rarity] = false
         RarityDropdown:AddCheckbox(rarity, function(state)
@@ -245,11 +266,17 @@ for _, rarity in ipairs(RarityList) do
     end
 end
 
--- TAB: FRUITS
-fruitsTab:CreateComment("--- Fruit Collection ---")
-fruitsTab:CreateToggleSwitch("Auto Collect Fruits", false, function(val)
+local fruitsSection = mainTab:CreateSection("Fruits")
+fruitsSection:CreateToggleSwitch("Auto Collect Fruits", false, function(val)
     Config.AutoCollectFruits = val
     if val then lib:Notify("Farm", "Auto Collect Fruits Active!", 2.0) end
+end)
+
+-- TAB: AUTOMATION
+local sellSection = autoTab:CreateSection("Sell")
+sellSection:CreateToggleSwitch("Sell All", false, function(val)
+    Config.SellAllEnabled = val
+    if val then lib:Notify("Farm", "Sell All Active!", 2.0) end
 end)
 
 -- TAB: SETTINGS
